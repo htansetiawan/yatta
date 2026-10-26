@@ -1,0 +1,34 @@
+# Never commit personal data, media, models or secrets.
+*.mp4
+*.mov
+*.MOV
+*.wav
+*.m4a
+*.mp3
+*.webm
+*.npy
+*.pt
+*.pth
+*.ply
+*.ckpt
+*.safetensors
+data/
+.env
+.env.*
+*.key
+*.pem
+auth.json
+registry.json
+
+# Tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+web/dist/
+web/openapi.json
+*.log
+.DS_Store
+*.egg-info/
+*.tsbuildinfo

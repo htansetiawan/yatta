@@ -1,0 +1,21 @@
+{
+  "note": "Copy to $YATTA_DATA/registry.json to list avatars trained outside Yatta (research runs). Paths are relative to GAUSSIAN_TALKER_ROOT. Never commit the real file: it points at personal data.",
+  "avatars": [
+    {
+      "id": "me-v1",
+      "name": "Me",
+      "edition": "v1",
+      "summary": "First recording, 5 min, one room.",
+      "experiment": "003-my-avatar",
+      "default_feature": "esperanto",
+      "variants": [
+        {"feature": "esperanto", "run": "esperanto-001",
+         "model": "experiments/003-my-avatar/runs/esperanto-001/model",
+         "config": "experiments/003-my-avatar/runs/esperanto-001/config.py",
+         "data": "experiments/003-my-avatar/runs/preparation/esperanto",
+         "preview": "experiments/003-my-avatar/runs/esperanto-001/val_render.mp4",
+         "metrics": {"face_psnr": 30.8, "face_lpips": 0.111, "lse_d": 8.78, "lse_c": 4.05}}
+      ]
+    }
+  ]
+}

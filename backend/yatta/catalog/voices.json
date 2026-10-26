@@ -1,0 +1,29 @@
+{
+  "note": "ElevenLabs premade voices verified with Henry's key on 2026-10-24 by a one-word synthesis (the key lacks voices_read, so the account's voice list cannot be fetched). Aria, Charlotte and Rachel returned HTTP 402 and are omitted. MMS voices are Meta's local CPU models (CC-BY-NC 4.0).",
+  "elevenlabs_model": "eleven_multilingual_v2",
+  "elevenlabs": [
+    {"id": "nPczCjzI2devNBz1zQrb", "name": "Brian", "gender": "male", "accent": "American", "style": "deep, narration"},
+    {"id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "gender": "male", "accent": "American", "style": "dominant"},
+    {"id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam", "gender": "male", "accent": "American", "style": "energetic"},
+    {"id": "cjVigY5qzO86Huf0OWal", "name": "Eric", "gender": "male", "accent": "American", "style": "smooth"},
+    {"id": "iP95p4xoKVk53GoZ742B", "name": "Chris", "gender": "male", "accent": "American", "style": "casual"},
+    {"id": "bIHbv24MWmeRgasZH58o", "name": "Will", "gender": "male", "accent": "American", "style": "relaxed"},
+    {"id": "CwhRBWXzGAHq8TQ4Fs17", "name": "Roger", "gender": "male", "accent": "American", "style": "laid-back"},
+    {"id": "pqHfZKP75CvOlQylNhV4", "name": "Bill", "gender": "male", "accent": "American", "style": "wise, older"},
+    {"id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "gender": "male", "accent": "British", "style": "broadcaster"},
+    {"id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "gender": "male", "accent": "British", "style": "warm storyteller"},
+    {"id": "IKne3meq5aSn9XLyUdCD", "name": "Charlie", "gender": "male", "accent": "Australian", "style": "conversational"},
+    {"id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum", "gender": "male", "accent": "Transatlantic", "style": "husky"},
+    {"id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "gender": "neutral", "accent": "American", "style": "calm"},
+    {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "gender": "female", "accent": "American", "style": "soft, news"},
+    {"id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura", "gender": "female", "accent": "American", "style": "upbeat"},
+    {"id": "cgSgspJ2msm6clMCkdW9", "name": "Jessica", "gender": "female", "accent": "American", "style": "expressive"},
+    {"id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "gender": "female", "accent": "American", "style": "friendly"},
+    {"id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "gender": "female", "accent": "British", "style": "confident"},
+    {"id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily", "gender": "female", "accent": "British", "style": "warm"}
+  ],
+  "mms": [
+    {"id": "eng", "name": "MMS English", "gender": "male", "accent": "generic", "style": "free, local"},
+    {"id": "ind", "name": "MMS Indonesian", "gender": "male", "accent": "Bahasa Indonesia", "style": "free, local"}
+  ]
+}

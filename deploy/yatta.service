@@ -1,0 +1,21 @@
+[Unit]
+Description=Yatta — personal avatar studio (API, worker and web app on 127.0.0.1:8790)
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=%h/git/yatta/backend
+ExecStart=%h/git/yatta/backend/.venv/bin/python -m yatta.app --port 8790
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+# Renders run inside this service; long clips keep several GB of frames in memory.
+MemoryMax=24G
+MemorySwapMax=0
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=default.target
