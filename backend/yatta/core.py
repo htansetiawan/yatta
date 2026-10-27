@@ -257,6 +257,13 @@ def script_pieces(script, heard, starts):
     return [" ".join(tokens[a:b]) for a, b in zip(bounds, bounds[1:])]
 
 
+def generation_size(width, height, megapixels=0.4, multiple=32):
+    """(w, h) with the photo's aspect ratio, about ``megapixels`` in area, both multiples of ``multiple``."""
+    scale = math.sqrt(megapixels * 1e6 / (width * height))
+    return (max(multiple, round(width * scale / multiple) * multiple),
+            max(multiple, round(height * scale / multiple) * multiple))
+
+
 def parse_silences(text):
     """(start, end) pairs from ffmpeg ``silencedetect`` output."""
     starts = [float(x) for x in re.findall(r"silence_start: (-?[0-9.]+)", text)]

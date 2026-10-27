@@ -76,6 +76,9 @@ class MiniMaxH3(Engine):
             pieces = [(start, end, text or heard) for (start, end, heard, _, _), text in zip(pieces, texts)]
         else:
             pieces = [(start, end, heard) for start, end, heard, _, _ in pieces]
+        # Generate at the photo's own shape: a square video from a tall photo gets black bars in some pieces and an
+        # invented background in others, so the joins jump.
+        width, height = core.generation_size(*steps.image_size(photo))
         server = start_server(job.dir / "comfyui.log")
         try:
             parts = []
@@ -88,7 +91,7 @@ class MiniMaxH3(Engine):
                 # A little room for H3's slightly slower speech; too much and it fills the time by repeating words.
                 seconds = min(MAX_VIDEO, max(MIN_PIECE, (end - start) * 1.05 + 0.2))
                 steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", raw, "--turbo",
-                           "--width", "640", "--height", "640", "--seconds", f"{seconds:.3f}",
+                           "--width", str(width), "--height", str(height), "--seconds", f"{seconds:.3f}",
                            "--server", f"http://127.0.0.1:{PORT}"], job.log, env={"PYTHONUNBUFFERED": "1"})
                 part = work / f"part_{index:02d}.mp4"
                 steps.ffmpeg(["-i", raw, "-t", f"{spoken_length(raw):.3f}", "-c:v", "libx264", "-crf", "16", "-pix_fmt",

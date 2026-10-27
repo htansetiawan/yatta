@@ -140,6 +140,11 @@ class StudioCoreTests(unittest.TestCase):
         self.assertEqual(core.split_words(words, 20.0), [(0.0, 7.05, "Hi, I am Enrica. Today", 0, 3), (7.05, 20.0, "we talk. Bye.", 3, 5)])
         self.assertEqual(core.split_words([[0.0, 3.0, "Short."]], 3.2), [(0.0, 3.2, "Short.", 0, 1)])
 
+    def test_generation_size_keeps_the_photo_shape(self):
+        self.assertEqual(core.generation_size(512, 512), (640, 640))
+        self.assertEqual(core.generation_size(512, 808), (512, 800))
+        self.assertEqual(core.generation_size(1920, 1080), (832, 480))
+
     def test_script_pieces_keep_the_scripts_spelling(self):
         script = "Glance is now tested against Point Cloud and G3DGS scenarios. This is the update."
         heard = "glance is now tested against point cloud and g3d .js scenarios this is the update".split()
