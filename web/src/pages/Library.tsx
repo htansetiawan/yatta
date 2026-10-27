@@ -13,7 +13,7 @@ export default function Library() {
   useEffect(() => { refresh(); }, [refresh]);
   usePoll(refresh, 5000, items.some(isActive));
   const remove = async (j: Render) => {
-    if (!confirm("Delete this video? This cannot be undone.")) return;
+    if (j.state === "done" && !confirm("Delete this video? This cannot be undone.")) return;
     try { await call(api.DELETE("/api/v1/renders/{job_id}", { params: { path: { job_id: j.id } } })); refresh(); }
     catch (e) { toast((e as Error).message, true); }
   };
@@ -36,7 +36,7 @@ export default function Library() {
             {j.state === "failed" && <p className="small" style={{ color: "var(--shu-ink)" }}>{j.detail}</p>}
             <div className="actions">
               {j.state === "done" && <><a className="btn sm" href={j.video_url ?? ""} download aria-label="Download">{icons.download}</a><button className="btn sm" onClick={() => setSharing(j)}>{icons.share}Share</button></>}
-              {!isActive(j) && <button className="btn sm ghost danger" onClick={() => remove(j)}>Delete</button>}
+              {!isActive(j) && <button className="btn sm ghost danger" onClick={() => remove(j)}>{icons.trash}Delete</button>}
             </div>
           </div>
         </article>

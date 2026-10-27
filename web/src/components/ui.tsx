@@ -16,6 +16,7 @@ export const icons = {
   bigPlay: <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="rgba(251,249,245,.94)" /><path d="M19 15.5v17c0 .8.9 1.3 1.6.9l13.5-8.5c.6-.4.6-1.3 0-1.7L20.6 14.6c-.7-.5-1.6 0-1.6.9z" fill="#1B1A17" /></svg>,
   download: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1.5v8.2m0 0L4.8 6.5M8 9.7l3.2-3.2M2.5 11v2a1 1 0 001 1h9a1 1 0 001-1v-2" /></svg>,
   share: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 10V1.8m0 0L5 4.8m3-3l3 3M3 8v5.2a1 1 0 001 1h8a1 1 0 001-1V8" /></svg>,
+  trash: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 001 .9h4.6a1 1 0 001-.9L12 4" /></svg>,
   spark: <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.6 4.4L14 7 9.6 8.6 8 13 6.4 8.6 2 7l4.4-1.6z" /></svg>,
 };
 
