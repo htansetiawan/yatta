@@ -125,13 +125,20 @@ class StudioCoreTests(unittest.TestCase):
 
     def test_split_at_pauses(self):
         self.assertEqual(core.split_at_pauses([], 10.0), [(0.0, 10.0)])
-        # cuts at the latest pause between 5.2 and 14.5 s into each piece
+        # 30 s needs 3 pieces of ~10 s: cut at the pauses nearest 10 s and then 20 s
         self.assertEqual(core.split_at_pauses([(3.0, 3.4), (9.0, 9.6), (13.0, 13.4), (20.0, 20.6)], 30.0),
-                         [(0.0, 13.2), (13.2, 20.3), (20.3, 30.0)])
-        # no pause in range: hard cut at the maximum
-        self.assertEqual(core.split_at_pauses([(1.0, 1.2)], 20.0), [(0.0, 14.5), (14.5, 20.0)])
+                         [(0.0, 9.3), (9.3, 20.3), (20.3, 30.0)])
+        # just over the cap: two balanced pieces, never a sliver at the end
+        self.assertEqual(core.split_at_pauses([(7.0, 7.4), (14.3, 14.5)], 14.6), [(0.0, 7.2), (7.2, 14.6)])
+        # no pause in range: hard cut at the balanced point
+        self.assertEqual(core.split_at_pauses([(1.0, 1.2)], 20.0), [(0.0, 10.0), (10.0, 20.0)])
         pieces = core.split_at_pauses([(i * 2.0, i * 2.0 + 0.3) for i in range(1, 150)], 300.0)
         self.assertTrue(all(b - a <= 14.5 for a, b in pieces) and pieces[-1][1] == 300.0)
+        words = [[0.0, 0.6, "Hi,"], [0.7, 1.7, "I am Enrica."], [6.5, 7.0, "Today"], [7.1, 14.0, "we talk."],
+                 [14.4, 20.0, "Bye."]]
+        # 20 s needs two pieces of at most 13 s; the only gap that keeps both at least 5.2 s long is 7.0-7.1
+        self.assertEqual(core.split_words(words, 20.0), [(0.0, 7.05, "Hi, I am Enrica. Today"), (7.05, 20.0, "we talk. Bye.")])
+        self.assertEqual(core.split_words([[0.0, 3.0, "Short."]], 3.2), [(0.0, 3.2, "Short.")])
         self.assertEqual(core.parse_silences("silence_start: 1.25\nsilence_end: 1.5 | silence_duration: 0.25\n"), [(1.25, 1.5)])
 
 

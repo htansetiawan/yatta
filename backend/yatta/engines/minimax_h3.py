@@ -1,9 +1,12 @@
 """Lifelike: MiniMax H3 (reference-to-video) generates the video from one photo of the avatar, animated to the speech.
 
 It runs locally through ComfyUI (``scripts/run_minimax_h3.py`` in the research repository, experiment 007); nothing is
-sent to MiniMax. H3 makes at most about 15 s per generation, so the speech is cut at pauses into pieces of up to
-14.5 s, each piece is generated from the same photo, and the pieces are joined. H3 regenerates the soundtrack it is
-given; the final video keeps the original speech instead (H3 follows its timing to within about 20 ms).
+sent to MiniMax. H3 makes at most about 15 s per generation and regenerates the speech it is given as a voice
+reference: with the exact words in its prompt it says them correctly (word error rate 0.00 in experiment 007), without
+them it babbles. So the speech is transcribed with Whisper (word timings), cut between words into pieces of up to 13 s,
+and each piece is generated from the same photo with its audio as the voice and its words in the prompt. H3 speaks a
+little slower than the reference, so each piece gets about 12 % more frames, and the final video keeps H3's own
+soundtrack (which matches the lips), with each piece's trailing silence trimmed before joining.
 
 ComfyUI is started for each render and stopped afterwards: even idle it keeps about 40 GB of GPU memory.
 """
@@ -29,8 +32,11 @@ MODELS = ("diffusion_models/minimax_h3_ref2va_int8_convrot.safetensors",
           "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
           "vae/minimax_h3_video_vae_fp16.safetensors", "vae/minimax_h3_audio_vae_fp32.safetensors",
           "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors")
-MAX_PIECE = 14.5  # seconds; H3's trained range is 124-362 frames at 24 fps (5.2-15 s)
+SPEECHFEAT_PY = settings.speechfeat_python
+TRANSCRIBE = ROOT / "scripts/transcribe_words.py"
+MAX_PIECE = 13.0  # seconds of our speech; H3's trained range is 124-362 frames at 24 fps (5.2-15 s)
 MIN_PIECE = 5.2
+MAX_VIDEO = 15.0
 
 
 class MiniMaxH3(Engine):
@@ -50,30 +56,35 @@ class MiniMaxH3(Engine):
         return "~25 min to load, then ~40 s per 10 s of speech"
 
     def available(self):
-        return (PY.is_file() and RUNNER.is_file() and (COMFY / "main.py").is_file()
+        return (PY.is_file() and RUNNER.is_file() and TRANSCRIBE.is_file() and SPEECHFEAT_PY.is_file() and (COMFY / "main.py").is_file()
                 and all((COMFY / "models" / m).exists() for m in MODELS))
 
     def render(self, job):
         photo = face_photo(job.variant, job.log)
         work = job.dir / "h3"
         work.mkdir(exist_ok=True)
-        pieces = core.split_at_pauses(silences(job.speech), job.seconds, MAX_PIECE, MIN_PIECE)
+        job.status("rendering", "MiniMax H3: transcribing the speech")
+        steps.run([SPEECHFEAT_PY, TRANSCRIBE, job.speech, "--out", work / "words.json"], job.log)
+        words = json.loads((work / "words.json").read_text())["words"]
+        pieces = core.split_words(words, job.seconds, MAX_PIECE, MIN_PIECE)
+        if not pieces:
+            raise steps.StepError("no words found in the speech")
         server = start_server(job.dir / "comfyui.log")
         try:
             parts = []
-            for index, (start, end) in enumerate(pieces):
+            for index, (start, end, text) in enumerate(pieces):
                 job.status("rendering", f"MiniMax H3: piece {index + 1} of {len(pieces)}"
                            + (" (loading the model first, about 25 min)" if index == 0 else ""))
                 audio = work / f"speech_{index:02d}.wav"
                 steps.ffmpeg(["-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", job.speech, "-c:a", "pcm_s16le", audio], job.log)
                 raw = work / f"h3_{index:02d}.mp4"
-                steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--out", raw, "--turbo",
-                           "--width", "640", "--height", "640", "--seconds", f"{max(end - start, MIN_PIECE):.3f}",
+                seconds = min(MAX_VIDEO, max(MIN_PIECE, (end - start) * 1.12 + 0.3))
+                steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", raw, "--turbo",
+                           "--width", "640", "--height", "640", "--seconds", f"{seconds:.3f}",
                            "--server", f"http://127.0.0.1:{PORT}"], job.log, env={"PYTHONUNBUFFERED": "1"})
                 part = work / f"part_{index:02d}.mp4"
-                # Keep H3's frames for the piece's length and put the original speech back.
-                steps.ffmpeg(["-i", raw, "-i", audio, "-map", "0:v", "-map", "1:a", "-t", f"{end - start:.3f}",
-                              "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", part], job.log)
+                steps.ffmpeg(["-i", raw, "-t", f"{spoken_length(raw):.3f}", "-c:v", "libx264", "-crf", "16", "-pix_fmt",
+                              "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", part], job.log)
                 parts.append(part)
         finally:
             stop_server(server)
@@ -91,6 +102,15 @@ class MiniMaxH3(Engine):
         output.unlink(missing_ok=True)
         for path in (job.dir / "h3").glob("*"):
             path.unlink(missing_ok=True)
+
+
+def spoken_length(video, tail=0.3):
+    """Length of ``video`` up to its last speech plus ``tail`` seconds (drops trailing silence)."""
+    length = steps.duration(video) or 0
+    quiet = silences(video)
+    if quiet and quiet[-1][1] >= length - 0.05 and quiet[-1][0] > 1.0:
+        return min(length, quiet[-1][0] + tail)
+    return length
 
 
 def silences(wav):

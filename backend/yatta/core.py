@@ -1,6 +1,7 @@
 """Pure helpers (standard library only): pose looping, audio levels, log parsing and the avatar registry."""
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -195,18 +196,37 @@ def load_quick_avatars(data=DATA):
 
 
 def split_at_pauses(silences, total, max_len=14.5, min_len=5.2):
-    """Cut ``total`` seconds of speech into pieces of at most ``max_len`` s, at the middle of a pause where one falls
-    between ``min_len`` and ``max_len`` into the piece (the latest such pause), else hard at ``max_len``.
+    """Cut ``total`` seconds of speech into the fewest pieces of at most ``max_len`` s, of about equal length.
 
-    ``silences`` is a list of (start, end) pauses. Returns [(start, end), ...] covering 0..total.
+    Each cut goes to the middle of the pause closest to the balanced cut point, among pauses that keep this piece
+    and the rest at least ``min_len`` long and this piece at most ``max_len``; with no such pause it is a hard cut at
+    the balanced point. ``silences`` is a list of (start, end) pauses. Returns [(start, end), ...] covering 0..total.
     """
     pieces, start = [], 0.0
     while total - start > max_len:
-        cuts = [(a + b) / 2 for a, b in silences if start + min_len <= (a + b) / 2 <= start + max_len]
-        cut = round(max(cuts), 3) if cuts else round(start + max_len, 3)
+        remaining = total - start
+        target = start + remaining / math.ceil(remaining / max_len)
+        cuts = [(a + b) / 2 for a, b in silences]
+        cuts = [c for c in cuts if start + min_len <= c <= start + max_len and total - c >= min_len]
+        cut = round(min(cuts, key=lambda c: abs(c - target)) if cuts else target, 3)
         pieces.append((start, cut))
         start = cut
     pieces.append((start, round(total, 3)))
+    return pieces
+
+
+def split_words(words, total, max_len=13.0, min_len=5.2):
+    """Pieces of speech cut between words: [(start, end, text), ...] from Whisper words [[start, end, word], ...].
+
+    Cuts go in the gaps between consecutive words (``split_at_pauses`` with each gap as a pause); each word belongs
+    to the piece holding its midpoint. Pieces without words are dropped.
+    """
+    gaps = [(words[i][1], words[i + 1][0]) for i in range(len(words) - 1)]
+    pieces = []
+    for start, end in split_at_pauses(gaps, total, max_len, min_len):
+        text = " ".join(w[2] for w in words if start <= (w[0] + w[1]) / 2 < end or (end == total and (w[0] + w[1]) / 2 >= end))
+        if text.strip():
+            pieces.append((start, end, text.strip()))
     return pieces
 
 
