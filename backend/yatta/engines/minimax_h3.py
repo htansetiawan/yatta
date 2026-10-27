@@ -39,6 +39,8 @@ TRANSCRIBE = ROOT / "scripts/transcribe_words.py"
 MAX_PIECE = 13.0  # seconds of our speech; H3's trained range is 124-362 frames at 24 fps (5.2-15 s)
 MIN_PIECE = 5.2
 MAX_VIDEO = 15.0
+WER_RETRY = 0.10  # regenerate a piece whose transcript differs from its words by more than this
+ATTEMPTS = 3
 
 
 class MiniMaxH3(Engine):
@@ -87,12 +89,27 @@ class MiniMaxH3(Engine):
                            + (" (loading the model first, about 25 min)" if index == 0 else ""))
                 audio = work / f"speech_{index:02d}.wav"
                 steps.ffmpeg(["-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", job.speech, "-c:a", "pcm_s16le", audio], job.log)
-                raw = work / f"h3_{index:02d}.mp4"
                 # A little room for H3's slightly slower speech; too much and it fills the time by repeating words.
                 seconds = min(MAX_VIDEO, max(MIN_PIECE, (end - start) * 1.05 + 0.2))
-                steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", raw, "--turbo",
-                           "--width", str(width), "--height", str(height), "--seconds", f"{seconds:.3f}",
-                           "--server", f"http://127.0.0.1:{PORT}"], job.log, env={"PYTHONUNBUFFERED": "1"})
+                # H3 sometimes repeats or garbles a phrase (4-step sampling is random): check what it said, and
+                # regenerate with another seed when it is off, keeping the closest take.
+                best = None
+                for attempt in range(ATTEMPTS):
+                    take = work / f"h3_{index:02d}_{attempt}.mp4"
+                    steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", take,
+                               "--turbo", "--seed", str(42 + attempt), "--width", str(width), "--height", str(height),
+                               "--seconds", f"{seconds:.3f}", "--server", f"http://127.0.0.1:{PORT}"], job.log,
+                              env={"PYTHONUNBUFFERED": "1"})
+                    error = core.word_error_rate(text, transcript(take, work / f"take_{index:02d}_{attempt}.json", job.log))
+                    with open(job.log, "a") as out:
+                        out.write(f"piece {index + 1} take {attempt + 1}: word error rate {error:.2f}\n")
+                    if best is None or error < best[0]:
+                        best = (error, take)
+                    if error <= WER_RETRY:
+                        break
+                    job.status("rendering", f"MiniMax H3: piece {index + 1} of {len(pieces)}, retake {attempt + 2} "
+                               f"({error:.0%} of the words were off)")
+                raw = best[1]
                 part = work / f"part_{index:02d}.mp4"
                 steps.ffmpeg(["-i", raw, "-t", f"{spoken_length(raw):.3f}", "-c:v", "libx264", "-crf", "16", "-pix_fmt",
                               "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", part], job.log)
@@ -113,6 +130,11 @@ class MiniMaxH3(Engine):
         output.unlink(missing_ok=True)
         for path in (job.dir / "h3").glob("*"):
             path.unlink(missing_ok=True)
+
+
+def transcript(media, out_json, log):
+    steps.run([SPEECHFEAT_PY, TRANSCRIBE, media, "--out", out_json], log)
+    return json.loads(Path(out_json).read_text())["text"]
 
 
 def spoken_length(video, tail=0.3):

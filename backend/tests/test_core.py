@@ -140,6 +140,11 @@ class StudioCoreTests(unittest.TestCase):
         self.assertEqual(core.split_words(words, 20.0), [(0.0, 7.05, "Hi, I am Enrica. Today", 0, 3), (7.05, 20.0, "we talk. Bye.", 3, 5)])
         self.assertEqual(core.split_words([[0.0, 3.0, "Short."]], 3.2), [(0.0, 3.2, "Short.", 0, 1)])
 
+    def test_word_error_rate(self):
+        self.assertEqual(core.word_error_rate("Hello, World!", "hello world"), 0.0)
+        self.assertAlmostEqual(core.word_error_rate("point cloud and G3DGS", "point cloud and point cloud and G3DGS"), 0.75)
+        self.assertEqual(core.word_error_rate("one two", "one three"), 0.5)
+
     def test_generation_size_keeps_the_photo_shape(self):
         self.assertEqual(core.generation_size(512, 512), (640, 640))
         self.assertEqual(core.generation_size(512, 808), (512, 800))

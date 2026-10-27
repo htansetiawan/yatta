@@ -257,6 +257,20 @@ def script_pieces(script, heard, starts):
     return [" ".join(tokens[a:b]) for a, b in zip(bounds, bounds[1:])]
 
 
+def word_error_rate(reference, heard):
+    """Word-level edit distance / reference length, ignoring case and punctuation."""
+    ref = re.findall(r"[\w']+", reference.lower())
+    hyp = re.findall(r"[\w']+", heard.lower())
+    if not ref:
+        return 0.0 if not hyp else 1.0
+    row = list(range(len(hyp) + 1))
+    for i in range(1, len(ref) + 1):
+        previous, row[0] = row[0], i
+        for j in range(1, len(hyp) + 1):
+            previous, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, previous + (ref[i - 1] != hyp[j - 1]))
+    return row[len(hyp)] / len(ref)
+
+
 def generation_size(width, height, megapixels=0.4, multiple=32):
     """(w, h) with the photo's aspect ratio, about ``megapixels`` in area, both multiples of ``multiple``."""
     scale = math.sqrt(megapixels * 1e6 / (width * height))
