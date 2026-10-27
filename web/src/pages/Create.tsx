@@ -95,12 +95,12 @@ export default function Create() {
                 </button>
               ))}
             </div>
-            {draft.mode === "text" && <textarea value={draft.text} maxLength={2500} placeholder="What should your avatar say?" aria-label="Script" onChange={(e) => update({ text: e.target.value })} />}
+            {draft.mode === "text" && <textarea value={draft.text} maxLength={5000} placeholder="What should your avatar say?" aria-label="Script" onChange={(e) => update({ text: e.target.value })} />}
             {draft.mode === "upload" && <UploadPane upload={upload} setUpload={setUpload} />}
             {draft.mode === "record" && <RecordPane upload={upload} setUpload={setUpload} />}
             <div className="composer-foot">
               <span className="small muted mono">
-                {draft.mode === "text" ? `${draft.text.length.toLocaleString()} / 2,500 · ~${fmtSeconds(words / 2.6) || "0s"}` : upload ? `${upload.name} · ${fmtSeconds(upload.seconds)}` : "No audio yet"}
+                {draft.mode === "text" ? `${draft.text.length.toLocaleString()} / 5,000 · ~${fmtSeconds(words / 2.6) || "0s"}` : upload ? `${upload.name} · ${fmtSeconds(upload.seconds)}` : "No audio yet"}
               </span>
               <button className="btn shu lg" disabled={busy} onClick={generate}>{icons.spark}Generate</button>
             </div>
@@ -258,7 +258,7 @@ function UploadPane({ upload, setUpload }: { upload: { id: string; name: string;
       {upload && <div className="file-item"><div className="grow"><div style={{ fontWeight: 500 }}>{upload.name}</div><div className="small muted">{fmtSeconds(upload.seconds)} · drives the lips</div></div><button className="btn ghost sm" onClick={() => setUpload(null)}>Remove</button></div>}
       <label className="dropzone" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); accept(e.dataTransfer.files[0]); }}>
         <input type="file" accept="audio/*,video/*" hidden onChange={(e) => accept(e.target.files?.[0])} />
-        {busy ? <><span className="spinner" style={{ margin: "0 auto 8px" }} />Uploading…</> : <><strong>Drop an audio file</strong> or click to browse<br /><span className="small faint">WAV, MP3, M4A or a video with sound · up to 3 minutes</span></>}
+        {busy ? <><span className="spinner" style={{ margin: "0 auto 8px" }} />Uploading…</> : <><strong>Drop an audio file</strong> or click to browse<br /><span className="small faint">WAV, MP3, M4A or a video with sound · up to 5 minutes</span></>}
       </label>
     </div>
   );

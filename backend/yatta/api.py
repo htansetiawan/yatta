@@ -287,8 +287,8 @@ def create_render(body: schemas.RenderCreate):
     else:
         if not body.text.strip():
             bad("write something for the avatar to say")
-        if len(body.text) > 2500:
-            bad("keep the script under 2,500 characters")
+        if len(body.text) > 5000:
+            bad("keep the script under 5,000 characters (about 5 minutes of speech)")
         if voice.provider == "clone":
             try:
                 if engines.clone_profile(voice.id or "").get("state") != "ready":

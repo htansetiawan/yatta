@@ -37,7 +37,7 @@ LATENTSYNC_PY = settings.latentsync_python
 OWN_ROOTS = (str(ROOT), str(PACKAGE.parents[1]), str(NARRATE.parent))  # GPU processes from these are Yatta's own
 LATENTSYNC_MIN_FREE_MIB = 20000  # inference peaks near 18 GB
 BASE_SECONDS = 30
-MAX_SECONDS = 180
+MAX_SECONDS = 300  # 5 minutes (Henry, 2026-10-26); a Realistic render then takes about an hour
 OWN_FILES = {"bc.jpg", "transforms_val.json", "transforms_train.json", "track_params.pt", "speech.wav", "speech.npy"}
 SLIM = core.DATA / "cache" / "slim"
 
