@@ -164,6 +164,10 @@ input[type=range] { width: 100%; accent-color: var(--sumi); }
 .thumb { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; background: var(--mist); flex: none; }
 .chip { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-family: var(--serif); font-size: 13px; color: #fff; }
 .voice-list { max-height: 286px; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+.browse-all { margin-top: 6px; width: 100%; justify-content: center; }
+.choice-modal-list { display: flex; flex-direction: column; gap: 6px; max-height: min(60vh, 520px); overflow: auto; padding: 2px 2px 2px 0; }
+.option.muted-choice { opacity: .62; }
+.option.muted-choice .sub { color: var(--sumi-3); }
 .seg { display: flex; background: var(--mist); border-radius: 999px; padding: 3px; gap: 2px; margin-bottom: 9px; }
 .seg button { flex: 1; border: 0; background: transparent; border-radius: 999px; padding: 5px 8px; font-size: 12px; font-weight: 500; color: var(--sumi-2); cursor: pointer; }
 .seg button.active { background: var(--white); color: var(--sumi); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }

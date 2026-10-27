@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Avatar, Background, call, EngineInfo, Render, RenderCreate, Status, uploadFile, VoiceCatalogue } from "../api/client";
 import { chipColor, fmtSeconds, icons, store, usePoll, useToast } from "../components/ui";
 import { isActive, jobEngine, JobRow, PublishModal } from "../components/renders";
 import { CloneDialog } from "./Voices";
+import { Choice, ChoiceList } from "../components/choices";
 
 type Mode = "text" | "upload" | "record";
 type Provider = "clone" | "elevenlabs" | "mms";
@@ -59,14 +60,18 @@ export default function Create() {
 
   const installed = engines.filter((e) => e.available);
   const engine = installed.find((e) => e.id === draft.engine) ?? installed[0];
-  const pickable = useMemo(() => avatars.filter((a) => !engine || a.engines.includes(engine.id)), [avatars, engine]);
-  const avatar = pickable.find((a) => a.id === draft.avatar) ?? pickable[0];
+  const fits = useCallback((a: Avatar) => !engine || a.engines.includes(engine.id), [engine]);
+  // The chosen face stays chosen; if the engine cannot render it, the picker says so instead of switching faces.
+  const avatar = avatars.find((a) => a.id === draft.avatar) ?? avatars.find(fits);
+  const avatarFits = !!avatar && fits(avatar);
+  const misfit = engine?.needs === "trained" ? "Needs a trained avatar" : `Not available with ${engine?.model ?? "this engine"}`;
   const feature = avatar?.variants.find((v) => v.feature === draft.feature)?.feature ?? avatar?.default_feature;
   const voiceList = voices ? voices[draft.provider] : [];
   const focused = renders.find((j) => j.id === focus) ?? renders.find((j) => j.state === "done");
 
   const generate = async () => {
     if (!avatar || !engine) return;
+    if (!avatarFits) return toast(`${avatar.name} can't be rendered with ${engine.model}: pick another face or engine`, true);
     const body: RenderCreate = {
       avatar: avatar.id, feature: engine.speech_models ? feature ?? avatar.default_feature : null, engine: engine.id,
       background: draft.background, voice: { provider: "elevenlabs" }, text: "",
@@ -88,6 +93,41 @@ export default function Create() {
     } catch (e) { toast((e as Error).message, true); }
     setBusy(false);
   };
+
+  const pickFace = (id: string) => {
+    const a = avatars.find((x) => x.id === id);
+    if (!a) return;
+    if (fits(a)) return update({ avatar: a.id, feature: a.default_feature });
+    const next = installed.find((e) => a.engines.includes(e.id));
+    update({ avatar: a.id, feature: a.default_feature, ...(next ? { engine: next.id } : {}) });
+    if (next) toast(`Switched to ${next.model}: ${engine?.model} can't render ${a.name}`);
+  };
+  const engineChoices: Choice[] = installed.map((e) => ({
+    id: e.id, search: `${e.model} ${e.name} ${e.summary}`,
+    title: <>{e.model}{e.badge && <span className={`badge ${e.badge === "Recommended" ? "shu" : "ink"}`}>{e.badge}</span>}</>,
+    sub: `${e.name} · ${e.summary}`, detail: e.speed,
+  }));
+  const faceChoices: Choice[] = [...avatars.filter(fits), ...avatars.filter((a) => !fits(a))].map((a) => ({
+    id: a.id, search: `${a.name} ${a.edition ?? ""} ${a.summary ?? ""} ${a.source}`,
+    lead: <img className="thumb" alt="" src={a.variants.find((v) => v.poster_url)?.poster_url ?? ""} />,
+    title: <>{a.name}{a.edition ? ` ${a.edition}` : ""}{a.source !== "experiment" && <span className="badge">{a.source}</span>}</>,
+    sub: a.summary, note: fits(a) ? undefined : misfit,
+  }));
+  const speechChoices: Choice[] = (avatar?.variants ?? []).map((v) => ({
+    id: v.feature, search: `${v.label} ${v.note}`,
+    title: <>{v.label}{v.feature === avatar?.default_feature && <span className="badge ink">Best</span>}</>, sub: v.note,
+    trailing: <span className="small muted mono">{(v.metrics as { lse_d?: number }).lse_d?.toFixed(2) ?? ""}</span>,
+  }));
+  const voiceChoices: Choice[] = voiceList.map((v) => {
+    const ready = !v.state || v.state === "ready";
+    return {
+      id: v.id, disabled: !ready, search: `${v.name} ${v.gender ?? ""} ${v.accent ?? ""} ${v.style ?? ""}`,
+      lead: <span className="chip" style={{ background: chipColor(v.id) }}>{v.name[0]}</span>,
+      title: <>{v.name}{v.state === "preparing" && <span className="badge warn">Preparing</span>}{v.state === "failed" && <span className="badge shu">Failed</span>}</>,
+      sub: v.state === "failed" ? v.detail : [v.gender, v.accent, v.style].filter(Boolean).join(" · "),
+      trailing: ready ? <SampleButton provider={draft.provider} voiceId={v.id} sampleUrl={v.sample_url} /> : undefined,
+    };
+  });
 
   const words = draft.text.trim() ? draft.text.trim().split(/\s+/).length : 0;
   return (
@@ -140,34 +180,19 @@ export default function Create() {
         <aside className="settings">
           <section>
             <div className="section-label"><span>Engine<span className="kanji">方式</span></span></div>
-            <div className="picker">{installed.map((e) => (
-              <button key={e.id} className={`option${e.id === engine?.id ? " selected" : ""}`} onClick={() => update({ engine: e.id })}>
-                <span className="grow"><span className="title">{e.model}{e.badge && <span className={`badge ${e.badge === "Recommended" ? "shu" : "ink"}`}>{e.badge}</span>}</span>
-                  <span className="sub">{e.name} · {e.summary}</span><span className="sub faint">{e.speed}</span></span>
-              </button>
-            ))}</div>
+            <ChoiceList choices={engineChoices} selected={engine?.id} onSelect={(id) => update({ engine: id })} noun="models" />
           </section>
 
           <section>
-            <div className="section-label"><span>Face<span className="kanji">顔</span></span><Link className="faint small" to="/avatars">Browse</Link></div>
-            <div className="picker">{pickable.map((a) => (
-              <button key={a.id} className={`option${a.id === avatar?.id ? " selected" : ""}`} onClick={() => update({ avatar: a.id, feature: a.default_feature })}>
-                <img className="thumb" alt="" src={a.variants.find((v) => v.poster_url)?.poster_url ?? ""} />
-                <span className="grow"><span className="title">{a.name}{a.edition ? ` ${a.edition}` : ""}{a.source !== "experiment" && <span className="badge">{a.source}</span>}</span>
-                  <span className="sub">{a.summary}</span></span>
-              </button>
-            ))}</div>
+            <div className="section-label"><span>Face<span className="kanji">顔</span></span><Link className="faint small" to="/avatars">Gallery</Link></div>
+            <ChoiceList choices={faceChoices} selected={avatar?.id} onSelect={pickFace} noun="faces" />
+            {avatar && !avatarFits && <div className="notice warn" style={{ marginTop: 8 }}>{avatar.name} can't be rendered with {engine?.model} ({misfit.toLowerCase()}). Pick another face or engine.</div>}
           </section>
 
           {avatar && engine?.speech_models && avatar.variants.length > 1 && (
             <section>
               <div className="section-label"><span>Speech model<span className="kanji">音声</span></span><span className="faint small">lip-sync error ↓</span></div>
-              <div className="picker">{avatar.variants.map((v) => (
-                <button key={v.feature} className={`option${v.feature === feature ? " selected" : ""}`} onClick={() => update({ feature: v.feature })}>
-                  <span className="grow"><span className="title">{v.label}{v.feature === avatar.default_feature && <span className="badge ink">Best</span>}</span><span className="sub">{v.note}</span></span>
-                  <span className="small muted mono">{(v.metrics as { lse_d?: number }).lse_d?.toFixed(2) ?? ""}</span>
-                </button>
-              ))}</div>
+              <ChoiceList choices={speechChoices} selected={feature} onSelect={(id) => update({ feature: id })} noun="speech models" />
             </section>
           )}
 
@@ -182,18 +207,8 @@ export default function Create() {
               ))}</div>
               {draft.provider === "clone" && <button className="btn sm" style={{ width: "100%", marginBottom: 8 }} onClick={() => setCloning(true)}>＋ Clone a voice</button>}
               {draft.provider === "elevenlabs" && status && !status.elevenlabs && <div className="notice warn">No ElevenLabs key on the server.</div>}
-              <div className="voice-list">{voiceList.map((v) => {
-                const ready = !v.state || v.state === "ready";
-                return (
-                  <div key={v.id} className={`option${v.id === draft.voice ? " selected" : ""}${ready ? "" : " disabled"}`} role="button" tabIndex={0}
-                    onClick={() => ready && update({ voice: v.id })}>
-                    <span className="chip" style={{ background: chipColor(v.id) }}>{v.name[0]}</span>
-                    <span className="grow"><span className="title">{v.name}{v.state === "preparing" && <span className="badge warn">Preparing</span>}{v.state === "failed" && <span className="badge shu">Failed</span>}</span>
-                      <span className="sub">{v.state === "failed" ? v.detail : [v.gender, v.accent, v.style].filter(Boolean).join(" · ")}</span></span>
-                    {ready && <SampleButton provider={draft.provider} voiceId={v.id} sampleUrl={v.sample_url} />}
-                  </div>
-                );
-              })}</div>
+              <ChoiceList choices={voiceChoices} selected={draft.voice} onSelect={(id) => update({ voice: id })} noun="voices"
+                empty={<p className="small muted">{draft.provider === "clone" ? "No cloned voices yet." : "No voices available."}</p>} />
             </> : <div className="notice">Your uploaded or recorded audio is the voice.</div>}
           </section>
 

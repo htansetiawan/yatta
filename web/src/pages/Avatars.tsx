@@ -12,7 +12,9 @@ export default function Avatars() {
   useEffect(() => { call(api.GET("/api/v1/avatars")).then(setAvatars).catch((e) => toast(e.message, true)); }, [toast]);
   const use = (a: Avatar) => {
     const draft = store.get<{ engine?: string }>("create", {});
-    store.set("create", { ...draft, avatar: a.id, feature: a.default_feature, ...(draft.engine && a.engines.includes(draft.engine) ? {} : { engine: a.engines[0] }) });
+    const keep = !draft.engine || a.engines.includes(draft.engine);
+    store.set("create", { ...draft, avatar: a.id, feature: a.default_feature, ...(keep ? {} : { engine: a.engines[0] }) });
+    if (!keep && a.engines[0]) toast(`${a.name} uses a different engine; Create switched to it`);
     navigate("/create");
   };
   return (
