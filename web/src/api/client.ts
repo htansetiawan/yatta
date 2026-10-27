@@ -14,6 +14,7 @@ export type Quick = Schemas["Quick"];
 export type Upload = Schemas["Upload"];
 export type Background = Schemas["Background"];
 export type RenderCreate = Schemas["RenderCreate"];
+export type EngineInfo = Schemas["EngineInfo"];
 
 export const api = createClient<paths>({ baseUrl: "" });
 

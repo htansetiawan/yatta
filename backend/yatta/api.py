@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from yatta import auth, core, engines, schemas, services
+from yatta import auth, core, engines, gpu, schemas, services, steps
 from yatta.config import PACKAGE, settings
 
 router = APIRouter(prefix="/api/v1")
@@ -66,9 +66,9 @@ def delete_session(response: Response):
 @router.get("/status", response_model=schemas.Status, tags=["system"])
 def status():
     queue = renders().list()
-    return {"gpu": engines.gpu_status(), "disk_free_gb": round(shutil.disk_usage(settings.data).free / 1e9, 1),
-            "elevenlabs": engines.elevenlabs_available(), "latentsync": engines.latentsync_available(),
-            "clone": engines.clone_available(),
+    return {"gpu": gpu.status(), "disk_free_gb": round(shutil.disk_usage(settings.data).free / 1e9, 1),
+            "elevenlabs": steps.elevenlabs_available(), "clone": steps.clone_available(),
+            "engines": {engine["id"]: engine["available"] for engine in engines.info()},
             "queue": {"active": sum(j["state"] not in services.TERMINAL for j in queue),
                       "waiting_gpu": sum(j["state"] == "waiting_gpu" for j in queue)},
             "training": sum(a["state"] == "training" for a in trainer().list()),
@@ -86,12 +86,18 @@ def gpu_check():
 def public_avatar(avatar):
     features = core.FEATURES
     return {key: avatar.get(key) for key in ("id", "name", "edition", "summary", "experiment", "default_feature", "source")} | {
-        "engines": avatar.get("engines", ["latentsync", "gaussiantalker"]),
+        "engines": engines.for_avatar(avatar),
         "variants": [{"feature": v["feature"], "label": features[v["feature"]][0], "note": features[v["feature"]][2],
                       "metrics": v.get("metrics", {}),
                       "preview_url": f"/media/avatar/{avatar['id']}/{v['feature']}/preview.mp4" if v.get("preview") else None,
                       "poster_url": f"/media/avatar/{avatar['id']}/{v['feature']}/poster.jpg" if v.get("preview") else None}
                      for v in avatar["variants"]]}
+
+
+@router.get("/engines", response_model=list[schemas.EngineInfo], tags=["avatars"])
+def list_engines():
+    """Video engines in picker order, including ones not installed on this server (``available: false``)."""
+    return engines.info()
 
 
 @router.get("/avatars", response_model=list[schemas.Avatar], tags=["avatars"])
@@ -128,7 +134,7 @@ def catalogue():
 @router.get("/voices", response_model=schemas.VoiceCatalogue, tags=["voices"])
 def voices():
     data = catalogue()
-    return {"elevenlabs": data["elevenlabs"], "mms": data["mms"], "clone_available": engines.clone_available(),
+    return {"elevenlabs": data["elevenlabs"], "mms": data["mms"], "clone_available": steps.clone_available(),
             "clone": [{"id": v["id"], "name": v["name"], "state": v["state"], "detail": v.get("detail"),
                        "accent": "cloned", "style": "your voice · F5-TTS",
                        "sample_url": f"/media/clone/{v['id']}/sample.wav" if v["state"] == "ready" else None}
@@ -146,8 +152,8 @@ def voice_sample(body: schemas.VoiceSampleRequest):
         text = ("Halo, saya suara bahasa Indonesia di Yatta." if body.id == "ind"
                 else f"Hi, I'm {entry['name']}. This is how your avatar will sound with my voice.")
         try:
-            engines.synthesize({"provider": body.provider, "id": body.id}, text, None, out, settings.data / "cache/voices.log")
-        except engines.StepError as error:
+            steps.synthesize({"provider": body.provider, "id": body.id}, text, None, out, settings.data / "cache/voices.log")
+        except steps.StepError as error:
             bad(error)
     return {"url": f"/media/voice/{out.name}"}
 
@@ -237,7 +243,7 @@ def finish_upload(upload_id: str):
             digest.update(block)
     record["sha256"] = digest.hexdigest()
     if record["kind"] in ("video", "audio"):
-        seconds = engines.duration(record["path"])
+        seconds = steps.duration(record["path"])
         if not seconds:
             shutil.rmtree(folder)
             bad("could not read this file as " + record["kind"])
@@ -291,9 +297,9 @@ def create_render(body: schemas.RenderCreate):
             bad("keep the script under 5,000 characters (about 5 minutes of speech)")
         if voice.provider == "clone":
             try:
-                if engines.clone_profile(voice.id or "").get("state") != "ready":
+                if steps.clone_profile(voice.id or "").get("state") != "ready":
                     bad("this cloned voice is still being prepared")
-            except engines.StepError as error:
+            except steps.StepError as error:
                 bad(error)
     background = request["background"]
     if background["type"] == "image":

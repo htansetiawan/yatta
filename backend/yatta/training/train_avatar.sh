@@ -19,8 +19,8 @@ gpu_wait() {  # other projects' GPU jobs block; this project's own renders do no
   # training started in a gap between them would then compete with the next one for hours.
   local busy
   while :; do
-    busy="$($SPY -m yatta.engines gpu-foreign 2>/dev/null)"
-    if [ -z "$busy" ]; then sleep 120; busy="$($SPY -m yatta.engines gpu-foreign 2>/dev/null)"; [ -z "$busy" ] && return; fi
+    busy="$($SPY -m yatta.gpu foreign 2>/dev/null)"
+    if [ -z "$busy" ]; then sleep 120; busy="$($SPY -m yatta.gpu foreign 2>/dev/null)"; [ -z "$busy" ] && return; fi
     log "waiting for GPU: $(echo "$busy" | head -1 | cut -d' ' -f2-)"; sleep $POLL
   done; }
 mapfile -t FEATURES < <(python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['features']))" $A/avatar.json)

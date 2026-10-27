@@ -57,6 +57,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Engines
+         * @description Video engines in picker order, including ones not installed on this server (``available: false``).
+         */
+        get: operations["list_engines_api_v1_engines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/avatars": {
         parameters: {
             query?: never;
@@ -404,7 +424,7 @@ export interface components {
              */
             source: "experiment" | "studio" | "quick";
             /** Engines */
-            engines: ("latentsync" | "gaussiantalker")[];
+            engines: string[];
             /** Variants */
             variants: components["schemas"]["Variant"][];
         } & {
@@ -458,6 +478,57 @@ export interface components {
             y: number;
             /** Size */
             size: number;
+        };
+        /** EngineInfo */
+        EngineInfo: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @description Picker title, e.g. Realistic
+             */
+            name: string;
+            /**
+             * Model
+             * @description The model behind the engine, e.g. LatentSync 1.6
+             */
+            model: string;
+            /** Summary */
+            summary: string;
+            /** Badge */
+            badge?: string | null;
+            /**
+             * Needs
+             * @description What an avatar must provide
+             * @enum {string}
+             */
+            needs: "clip" | "photo" | "trained";
+            /**
+             * Backgrounds
+             * @description Can replace the background
+             */
+            backgrounds: boolean;
+            /**
+             * Speech Models
+             * @description Offers the avatar's speech-feature variants
+             */
+            speech_models: boolean;
+            /**
+             * Background Note
+             * @default
+             */
+            background_note: string;
+            /** Speed */
+            speed: string;
+            /** Licence */
+            licence: string;
+            /**
+             * Available
+             * @description Installed on this server
+             */
+            available: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** Gpu */
         Gpu: {
@@ -580,9 +651,10 @@ export interface components {
             /**
              * Engine
              * @default gaussiantalker
-             * @enum {string}
              */
-            engine: "latentsync" | "gaussiantalker";
+            engine: string;
+            /** Engine Name */
+            engine_name?: string | null;
             /** Voice */
             voice: {
                 [key: string]: unknown;
@@ -604,14 +676,16 @@ export interface components {
         RenderCreate: {
             /** Avatar */
             avatar: string;
-            /** Feature */
-            feature: string;
+            /**
+             * Feature
+             * @description Speech model, for engines with speech_models
+             */
+            feature?: string | null;
             /**
              * Engine
              * @default latentsync
-             * @enum {string}
              */
-            engine: "latentsync" | "gaussiantalker";
+            engine: string;
             /**
              * Text
              * @default
@@ -649,10 +723,12 @@ export interface components {
             disk_free_gb: number;
             /** Elevenlabs */
             elevenlabs: boolean;
-            /** Latentsync */
-            latentsync: boolean;
             /** Clone */
             clone: boolean;
+            /** Engines */
+            engines: {
+                [key: string]: boolean;
+            };
             /** Queue */
             queue: {
                 [key: string]: unknown;
@@ -1005,6 +1081,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ok"];
+                };
+            };
+        };
+    };
+    list_engines_api_v1_engines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineInfo"][];
                 };
             };
         };

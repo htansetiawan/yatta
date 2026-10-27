@@ -124,7 +124,7 @@ function QuickCard() {
   };
   return (
     <div className="card panel">
-      <div><h2>Quick avatar <span className="badge shu" style={{ marginLeft: 6 }}>Realistic engine</span></h2>
+      <div><h2>Quick avatar <span className="badge shu" style={{ marginLeft: 6 }}>No training</span></h2>
         <p className="small muted" style={{ marginTop: 4 }}>No training. Upload 15–60 seconds of someone talking to the camera; Yatta regenerates the mouth on this clip.</p></div>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input className="input" style={{ flex: "1 1 220px" }} placeholder="Name, e.g. Henry · garden" value={name} onChange={(e) => setName(e.target.value)} />

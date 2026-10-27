@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, Avatar, Background, call, Render, RenderCreate, Status, uploadFile, VoiceCatalogue } from "../api/client";
+import { api, Avatar, Background, call, EngineInfo, Render, RenderCreate, Status, uploadFile, VoiceCatalogue } from "../api/client";
 import { chipColor, fmtSeconds, icons, store, usePoll, useToast } from "../components/ui";
 import { isActive, jobEngine, JobRow, PublishModal } from "../components/renders";
 import { CloneDialog } from "./Voices";
 
 type Mode = "text" | "upload" | "record";
 type Provider = "clone" | "elevenlabs" | "mms";
-type Engine = "latentsync" | "gaussiantalker";
 type Bg = { type: "original" } | { type: "color"; value: string } | { type: "image"; upload: string };
 interface Draft {
-  mode: Mode; text: string; provider: Provider; voice: string; engine: Engine; avatar?: string; feature?: string; background: Bg;
+  mode: Mode; text: string; provider: Provider; voice: string; engine: string; avatar?: string; feature?: string; background: Bg;
 }
 const COLORS = ["#ffffff", "#f1ede6", "#dfe4ea", "#e8e0d2", "#1c1c1c"];
 
@@ -21,6 +20,7 @@ export default function Create() {
     ...store.get<Partial<Draft>>("create", {}),
   }));
   const [avatars, setAvatars] = useState<Avatar[]>([]);
+  const [engines, setEngines] = useState<EngineInfo[]>([]);
   const [voices, setVoices] = useState<VoiceCatalogue | null>(null);
   const [backgrounds, setBackgrounds] = useState<Background[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
@@ -40,6 +40,7 @@ export default function Create() {
   const refreshVoices = useCallback(() => call(api.GET("/api/v1/voices")).then(setVoices).catch(() => {}), []);
   useEffect(() => {
     call(api.GET("/api/v1/avatars")).then(setAvatars).catch((e) => toast(e.message, true));
+    call(api.GET("/api/v1/engines")).then(setEngines).catch((e) => toast(e.message, true));
     call(api.GET("/api/v1/backgrounds")).then(setBackgrounds).catch(() => {});
     call(api.GET("/api/v1/status")).then(setStatus).catch(() => {});
     refreshVoices();
@@ -52,17 +53,18 @@ export default function Create() {
   };
   usePoll(refreshVoices, 5000, !!voices?.clone.some((v) => v.state === "preparing"));
 
-  const realistic = draft.engine === "latentsync" && status?.latentsync !== false;
-  const pickable = useMemo(() => avatars.filter((a) => realistic || a.engines.includes("gaussiantalker")), [avatars, realistic]);
+  const installed = engines.filter((e) => e.available);
+  const engine = installed.find((e) => e.id === draft.engine) ?? installed[0];
+  const pickable = useMemo(() => avatars.filter((a) => !engine || a.engines.includes(engine.id)), [avatars, engine]);
   const avatar = pickable.find((a) => a.id === draft.avatar) ?? pickable[0];
   const feature = avatar?.variants.find((v) => v.feature === draft.feature)?.feature ?? avatar?.default_feature;
   const voiceList = voices ? voices[draft.provider] : [];
   const focused = renders.find((j) => j.id === focus) ?? renders.find((j) => j.state === "done");
 
   const generate = async () => {
-    if (!avatar) return;
+    if (!avatar || !engine) return;
     const body: RenderCreate = {
-      avatar: avatar.id, feature: feature ?? avatar.default_feature, engine: realistic ? "latentsync" : "gaussiantalker",
+      avatar: avatar.id, feature: engine.speech_models ? feature ?? avatar.default_feature : null, engine: engine.id,
       background: draft.background, voice: { provider: "elevenlabs" }, text: "",
     };
     if (draft.mode === "text") {
@@ -134,15 +136,12 @@ export default function Create() {
         <aside className="settings">
           <section>
             <div className="section-label"><span>Engine<span className="kanji">方式</span></span></div>
-            <div className="picker">
-              <button className={`option${realistic ? " selected" : ""}`} onClick={() => update({ engine: "latentsync" })}>
-                <span className="grow"><span className="title">Realistic <span className="badge shu">Recommended</span></span>
-                  <span className="sub">Your real footage, new mouth · ~1.5 min per 10 s</span></span>
+            <div className="picker">{installed.map((e) => (
+              <button key={e.id} className={`option${e.id === engine?.id ? " selected" : ""}`} onClick={() => update({ engine: e.id })}>
+                <span className="grow"><span className="title">{e.name}{e.badge && <span className={`badge ${e.badge === "Recommended" ? "shu" : "ink"}`}>{e.badge}</span>}</span>
+                  <span className="sub">{e.summary}</span><span className="sub faint">{e.model} · {e.speed}</span></span>
               </button>
-              <button className={`option${realistic ? "" : " selected"}`} onClick={() => update({ engine: "gaussiantalker" })}>
-                <span className="grow"><span className="title">Fast</span><span className="sub">3D avatar · ~20 s · custom backgrounds</span></span>
-              </button>
-            </div>
+            ))}</div>
           </section>
 
           <section>
@@ -156,7 +155,7 @@ export default function Create() {
             ))}</div>
           </section>
 
-          {avatar && !realistic && avatar.variants.length > 1 && (
+          {avatar && engine?.speech_models && avatar.variants.length > 1 && (
             <section>
               <div className="section-label"><span>Speech model<span className="kanji">音声</span></span><span className="faint small">lip-sync error ↓</span></div>
               <div className="picker">{avatar.variants.map((v) => (
@@ -196,7 +195,7 @@ export default function Create() {
 
           <section>
             <div className="section-label"><span>Background<span className="kanji">背景</span></span></div>
-            {realistic ? <div className="notice">Realistic videos keep the room from the recording.</div> : <>
+            {!engine?.backgrounds ? <div className="notice">{engine?.background_note || "Keeps the room from the recording."}</div> : <>
               <div className="swatches">
                 <button className={`swatch original${draft.background.type === "original" ? " selected" : ""}`} title="Original backdrop" onClick={() => update({ background: { type: "original" } })} />
                 {COLORS.map((hex) => (

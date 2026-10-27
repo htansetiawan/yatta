@@ -118,6 +118,10 @@ class StudioCoreTests(unittest.TestCase):
         avatars = [{"id": "a", "variants": [{"feature": "deepspeech"}, {"feature": "esperanto"}]}]
         self.assertEqual(core.find_variant(avatars, "a", "esperanto")[1], {"feature": "esperanto"})
         self.assertEqual(core.find_variant(avatars, "a", "whisper"), (None, None))
+        self.assertEqual(core.find_variant(avatars, "a")[1], {"feature": "deepspeech"})  # no feature: the first
+        avatars[0]["default_feature"] = "esperanto"
+        self.assertEqual(core.find_variant(avatars, "a")[1], {"feature": "esperanto"})
+        self.assertEqual(core.find_variant(avatars, "b"), (None, None))
 
 
 if __name__ == "__main__":

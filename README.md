@@ -4,8 +4,10 @@
 
 Yatta (やった, Japanese for *"Yay!"* or *"I did it!"*) is a personal avatar studio. You write a script and pick a face and a voice; Yatta renders a talking video you can download or share with a link.
 
-- **Realistic engine:** [LatentSync 1.6](https://github.com/bytedance/LatentSync) keeps real footage of you and regenerates only the mouth to match the speech. It needs no training: a 15–60 s clip is enough.
-- **Fast engine:** a [GaussianTalker](https://github.com/cvlab-kaist/GaussianTalker) avatar trained on 3–6 minutes of video. It renders in about 20 s and supports custom backgrounds.
+- **Engines.** Each video model is a plug-in (`backend/yatta/engines/`), and the studio offers whichever are installed:
+  - **Realistic:** [LatentSync 1.6](https://github.com/bytedance/LatentSync) keeps real footage of you and regenerates only the mouth to match the speech. It needs no training: a 15–60 s clip is enough.
+  - **Expressive** (experimental): [LongCat-Video-Avatar 1.5](https://github.com/meituan-longcat/LongCat-Video) generates the whole video from one photo, so the head and face move freely.
+  - **Fast:** a [GaussianTalker](https://github.com/cvlab-kaist/GaussianTalker) avatar trained on 3–6 minutes of video. It renders in about 20 s and supports custom backgrounds.
 - **Voices:**
   - [ElevenLabs](https://elevenlabs.io) stock voices.
   - Meta MMS (free and local; English and Indonesian).
@@ -27,13 +29,15 @@ backend/yatta/
    api.py       /api/v1 routers: session, status, avatars, voices, uploads, renders, trainings
    schemas.py   request/response models → OpenAPI (/api/v1/openapi.json, docs at /api/docs)
    services.py  render queue (one GPU worker), training manager, voice clones, Quick avatars
-   engines.py   speech → features → GaussianTalker / LatentSync render → MP4; GPU gate
+   steps.py     speech (ElevenLabs, MMS, cloned voices), audio levels, final MP4
+   gpu.py       GPU gate: never compete with other projects' jobs
+   engines/     one module per video model (LatentSync, LongCat, GaussianTalker) + the registry
    core.py      pure helpers (pose looping, log parsing, registry)
    training/    train_avatar.sh + configs: GaussianTalker training as a systemd unit
 site/           landing page, deployed to GitHub Pages by .github/workflows/pages.yml
 ```
 
-Read [docs/architecture.md](docs/architecture.md) for the request lifecycle and the GPU policy.
+Read [docs/architecture.md](docs/architecture.md) for the request lifecycle, the GPU policy and how to add an engine.
 
 ## Run locally
 
@@ -62,6 +66,7 @@ Settings come from the environment or from `~/.config/yatta/env` (`KEY=VALUE`, o
 | `YATTA_HOSTS` | `yatta.enrica.ai,avatar.enrica.ai` | Allowed hosts; the first is canonical, the others redirect to it |
 | `GAUSSIAN_TALKER_ROOT` | `~/git/gaussian-talker` | GaussianTalker environments and scripts |
 | `LATENTSYNC_ROOT`, `LATENTSYNC_PYTHON` | under `GAUSSIAN_TALKER_ROOT/.local` | LatentSync checkout and interpreter |
+| `LONGCAT_ROOT`, `LONGCAT_PYTHON` | under `GAUSSIAN_TALKER_ROOT/.local` | LongCat-Video checkout (with `weights/`) and interpreter |
 | `NARRATE_BIN` | `~/git/narrate/narrate` | Voice cloning |
 | `YATTA_GPU_POLL` | `1800` | Seconds between GPU checks while another project is using it |
 | `YATTA_WORKER` | `1` | `0` serves the API without processing renders |
@@ -99,5 +104,6 @@ Yatta's own code is © Henry Tan. The engines it drives have their own licences:
 | F5-TTS weights | CC-BY-NC 4.0 |
 | MMS voices | CC-BY-NC 4.0 |
 | LatentSync | Apache-2.0 |
+| LongCat-Video-Avatar | MIT |
 
 So the current stack is for personal and research use. Only create avatars or voice clones of people who agreed; Yatta asks for confirmation every time.

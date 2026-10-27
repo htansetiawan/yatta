@@ -15,12 +15,17 @@ from pathlib import Path
 
 import sys
 
-from yatta import core, engines
+from yatta import core, engines, gpu, steps
 from yatta.config import PACKAGE, settings
+from yatta.engines import gaussiantalker
 
 DATA = core.DATA
 TERMINAL = {"done", "failed", "cancelled"}
 GPU_POLL = settings.gpu_poll_seconds  # Henry: check waiting jobs every 30 minutes
+
+
+def fmt_minutes(seconds):
+    return f"{seconds:.0f} s" if seconds < 90 else f"{seconds / 60:.0f} min"
 
 
 def now():
@@ -92,23 +97,27 @@ class RenderQueue:
             return job
 
     def submit(self, request):
-        avatar, variant = core.find_variant(all_avatars(), request["avatar"], request["feature"])
+        try:
+            engine = engines.get(request.get("engine") or "latentsync")
+        except KeyError:
+            raise ValueError("unknown engine")
+        if not engine.available():
+            raise ValueError(f"{engine.name} ({engine.model}) is not installed on this server")
+        avatar, variant = core.find_variant(all_avatars(), request["avatar"], request.get("feature") if engine.speech_models else None)
         if not variant:
             raise ValueError("unknown avatar or speech model")
+        if not engine.supports(avatar):
+            raise ValueError(f"{avatar['name']} cannot be rendered with {engine.name}")
         job_id = new_id("r")
         job_dir = self.path(job_id)
         job_dir.mkdir(parents=True)
         job = {"id": job_id, "created": now(), "updated": now(), "state": "queued", "detail": "",
                "title": request.get("title") or (request.get("text") or "Uploaded audio")[:60],
                "text": request.get("text", ""), "voice": request["voice"], "audio_upload": request.get("audio_upload"),
-               "background": request.get("background", {"type": "original"}),
+               "background": request.get("background", {"type": "original"}) if engine.backgrounds else {"type": "original"},
                "avatar": avatar["id"], "avatar_name": f"{avatar['name']} {avatar.get('edition', '')}".strip(),
                "feature": variant["feature"], "published": None, "public": None,
-               "engine": "latentsync" if request.get("engine") == "latentsync" else "gaussiantalker"}
-        if job["engine"] == "latentsync" and not engines.latentsync_available():
-            raise ValueError("LatentSync is not installed on this server")
-        if variant.get("base") and job["engine"] != "latentsync":
-            raise ValueError("Quick avatars work on the Realistic engine only")
+               "engine": engine.id, "engine_name": engine.name}
         write_json(job_dir / "job.json", job)
         self.wake.set()
         return job
@@ -136,8 +145,8 @@ class RenderQueue:
                 if not variant.get("data"):  # Quick avatars have no GaussianTalker dataset
                     continue
                 try:
-                    engines.slim_track_params(variant["data"], log)
-                except (OSError, engines.StepError) as error:
+                    gaussiantalker.slim_track_params(variant["data"], log)
+                except (OSError, steps.StepError) as error:
                     with open(log, "a") as out:
                         out.write(f"{avatar['id']}/{variant['feature']}: {error}\n")
 
@@ -155,9 +164,10 @@ class RenderQueue:
         log = job_dir / "job.log"
         job = self.get(job_id)
         try:
-            avatar, variant = core.find_variant(all_avatars(), job["avatar"], job["feature"])
+            engine = engines.get(job.get("engine") or "gaussiantalker")
+            avatar, variant = core.find_variant(all_avatars(), job["avatar"], job["feature"] if engine.speech_models else None)
             if not variant:
-                raise engines.StepError("the avatar or speech model is no longer available")
+                raise steps.StepError("the avatar or speech model is no longer available")
             data = job_dir / "data"
             if data.exists():  # leftovers of an interrupted attempt
                 shutil.rmtree(data)
@@ -167,66 +177,47 @@ class RenderQueue:
             if job["voice"].get("provider") == "clone":  # F5-TTS runs on the GPU
                 self.wait_for_gpu(job_id, 6000)
             raw = job_dir / "speech_raw.wav"
-            engines.synthesize(job["voice"], job["text"], job.get("audio_upload"), raw, log)
-            # Quick avatars have no training audio to match (and LatentSync is not level-sensitive).
+            steps.synthesize(job["voice"], job["text"], job.get("audio_upload"), raw, log)
+            # Match the level of the avatar's training audio when it has one (DeepSpeech is level-sensitive).
             reference = Path(variant["data"]) / "aud.wav" if variant.get("data") else None
-            gain, seconds = engines.level_audio(raw, reference, data / "speech.wav", log)
-            if job.get("engine") == "latentsync":
-                self.process_latentsync(job_id, job_dir, variant, data / "speech.wav", seconds, log)
-                return
-            self.update(job_id, state="features", detail="Reading the speech", seconds=round(seconds, 2), gain_db=gain)
-            frames = engines.extract_features(variant["feature"], data / "speech.wav", data / "speech.npy", log)
-            engines.make_dataset(variant["data"], data, frames, log)
-            engines.make_background(job["background"], Path(variant["data"]) / "bc.jpg", data / "bc.jpg", log)
-            while True:
-                busy = engines.gpu_foreign_busy()
-                if not busy:
-                    # If another project used the GPU in the last 10 minutes it may be running back-to-back short
-                    # processes: confirm after 30 s so a render does not start in a gap. Otherwise start at once.
-                    if time.time() - engines.LAST_FOREIGN > 600:
-                        break
-                    time.sleep(30)
-                    busy = engines.gpu_foreign_busy()
-                    if not busy:
-                        break
-                self.update(job_id, state="waiting_gpu", detail=f"GPU busy with {busy[0]['label']} (or under "
-                            f"{engines.RENDER_MIN_FREE_MIB // 1000} GB free); checking every {GPU_POLL // 60} min",
-                            waiting_since=self.get(job_id).get("waiting_since") or now())
-                self.wake.wait(timeout=GPU_POLL)
-                self.wake.clear()
-            self.update(job_id, state="rendering", detail=f"Rendering {frames} frames", frames=frames)
+            gain, seconds = steps.level_audio(raw, reference, data / "speech.wav", log)
+            self.update(job_id, seconds=round(seconds, 2), gain_db=gain)
+
+            def status(state, detail="", **fields):
+                self.update(job_id, state=state, detail=detail, **fields)
+
+            render_job = engines.RenderJob(id=job_id, dir=job_dir, avatar=avatar, variant=variant, speech=data / "speech.wav",
+                                           seconds=seconds, background=job["background"], log=log, status=status)
+            engine.prepare(render_job)
+            self.wait_for_gpu(job_id, engine.min_free_mib)
+            status("rendering", f"{engine.name}: about {fmt_minutes(engine.estimate(seconds))} for {seconds:.0f} s of speech")
             started = time.time()
-            mov = engines.render(job_dir, variant, log)
+            output = engine.render(render_job)
             self.update(job_id, state="encoding", detail="Encoding video", render_seconds=round(time.time() - started, 1))
-            engines.encode(mov, job_dir / "video.mp4", job_dir / "poster.jpg", log)
-            shutil.rmtree(job_dir / "render" / "model" / "custom", ignore_errors=True)
-            self.update(job_id, state="done", detail="", duration=engines.duration(job_dir / "video.mp4"))
+            steps.encode(output, job_dir / "video.mp4", job_dir / "poster.jpg", log)
+            engine.cleanup(render_job, output)
+            self.update(job_id, state="done", detail="", duration=steps.duration(job_dir / "video.mp4"))
         except Exception as error:  # noqa: BLE001 - any failure ends the job with a readable message
             self.update(job_id, state="failed", detail=str(error)[:500])
 
     def wait_for_gpu(self, job_id, min_free_mib):
+        """Wait while another project works on the GPU or less than ``min_free_mib`` is free."""
         while True:
-            busy = engines.gpu_foreign_busy(min_free_mib)
+            busy = gpu.foreign_busy(min_free_mib)
             if not busy:
-                return
+                # If another project used the GPU in the last 10 minutes it may be running back-to-back short
+                # processes: confirm after 30 s so a render does not start in a gap. Otherwise start at once.
+                if time.time() - gpu.LAST_FOREIGN > 600:
+                    return
+                time.sleep(30)
+                busy = gpu.foreign_busy(min_free_mib)
+                if not busy:
+                    return
             self.update(job_id, state="waiting_gpu", detail=f"GPU busy with {busy[0]['label']} (or under "
                         f"{min_free_mib // 1000} GB free); checking every {GPU_POLL // 60} min",
                         waiting_since=self.get(job_id).get("waiting_since") or now())
             self.wake.wait(timeout=GPU_POLL)
             self.wake.clear()
-
-    def process_latentsync(self, job_id, job_dir, variant, wav, seconds, log):
-        """Realistic engine: LatentSync regenerates the mouth on a real clip of the avatar's own footage."""
-        base = variant.get("base") or engines.latentsync_base(variant["data"], log)
-        self.wait_for_gpu(job_id, engines.LATENTSYNC_MIN_FREE_MIB)
-        self.update(job_id, state="rendering", detail=f"LatentSync: about {round(seconds * 13 / 60) or 1} min for "
-                    f"{seconds:.0f} s of speech", seconds=round(seconds, 2))
-        started = time.time()
-        mp4 = engines.render_latentsync(job_dir, base, wav, log)
-        self.update(job_id, state="encoding", detail="Encoding video", render_seconds=round(time.time() - started, 1))
-        engines.encode(mp4, job_dir / "video.mp4", job_dir / "poster.jpg", log)
-        mp4.unlink(missing_ok=True)
-        self.update(job_id, state="done", detail="", duration=engines.duration(job_dir / "video.mp4"))
 
     def check_now(self):
         self.wake.set()
@@ -271,9 +262,9 @@ def prepare_clone(voice_id):
     folder = voices_root() / voice_id
     profile = read_json(folder / "voice.json")
     try:
-        manifest = engines.narrate(profile, SAMPLE_LINE, folder / "sample.wav", folder / "prepare.log", folder / "narrate")
+        manifest = steps.narrate(profile, SAMPLE_LINE, folder / "sample.wav", folder / "prepare.log", folder / "narrate")
         profile.update(text=profile.get("text") or manifest.get("reference_text", ""), state="ready",
-                       sample_seconds=engines.duration(folder / "sample.wav"))
+                       sample_seconds=steps.duration(folder / "sample.wav"))
     except Exception as error:  # noqa: BLE001
         profile.update(state="failed", detail=str(error)[:300])
     write_json(folder / "voice.json", profile)
@@ -310,16 +301,16 @@ def prepare_quick(quick_id):
         trimmed = folder / "source.mp4"
         cut = (["-ss", str(quick["start"])] if quick.get("start") else []) + \
               (["-to", str(quick["end"])] if quick.get("end") else [])
-        engines.ffmpeg(cut + ["-i", quick["source"], "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p",
+        steps.ffmpeg(cut + ["-i", quick["source"], "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p",
                                "-an", trimmed], log)
-        engines.run([engines.PY, core.ROOT / "scripts/select_crop.py", "--source", trimmed, "--output",
+        steps.run([steps.PY, core.ROOT / "scripts/select_crop.py", "--source", trimmed, "--output",
                       folder / "crop.json", "--detect-scale", "2.0"], log)
         crop = json.loads((folder / "crop.json").read_text())
-        engines.ffmpeg(["-i", trimmed, "-vf", crop["filter"], "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p",
+        steps.ffmpeg(["-i", trimmed, "-vf", crop["filter"], "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p",
                          "-an", folder / "clip.mp4"], log)
-        engines.ffmpeg(["-ss", "1", "-i", folder / "clip.mp4", "-frames:v", "1", "-q:v", "3", folder / "poster.jpg"], log)
+        steps.ffmpeg(["-ss", "1", "-i", folder / "clip.mp4", "-frames:v", "1", "-q:v", "3", folder / "poster.jpg"], log)
         trimmed.unlink()
-        quick.update(state="ready", crop=crop["filter"], seconds=engines.duration(folder / "clip.mp4"))
+        quick.update(state="ready", crop=crop["filter"], seconds=steps.duration(folder / "clip.mp4"))
     except Exception as error:  # noqa: BLE001
         quick.update(state="failed", detail=str(error)[:300])
     write_json(folder / "quick.json", quick)
@@ -396,19 +387,19 @@ class Trainer:
             for index, upload_id in enumerate(avatar["uploads"]):
                 source = get_upload(upload_id)["path"]
                 proposal = folder / f"crop_{index}.json"
-                engines.run([engines.PY, core.ROOT / "scripts/select_crop.py", "--source", source,
+                steps.run([steps.PY, core.ROOT / "scripts/select_crop.py", "--source", source,
                               "--output", proposal], log)
                 crop = json.loads(proposal.read_text())
-                seconds = engines.duration(source) or 0
+                seconds = steps.duration(source) or 0
                 # Crop coordinates refer to the upright full-resolution frame; the editor gets 960 px tall copies.
                 full = folder / f"frame_{index}_full.jpg"
-                engines.ffmpeg(["-ss", f"{seconds * 0.5:.2f}", "-i", source, "-frames:v", "1", "-q:v", "3", full], log)
-                width, height = engines.image_size(full)
+                steps.ffmpeg(["-ss", f"{seconds * 0.5:.2f}", "-i", source, "-frames:v", "1", "-q:v", "3", full], log)
+                width, height = steps.image_size(full)
                 full.unlink()
                 frames = []
                 for k, at in enumerate((0.15, 0.5, 0.85)):
                     image = folder / f"frame_{index}_{k}.jpg"
-                    engines.ffmpeg(["-ss", f"{seconds * at:.2f}", "-i", source, "-frames:v", "1", "-vf", "scale=-2:960",
+                    steps.ffmpeg(["-ss", f"{seconds * at:.2f}", "-i", source, "-frames:v", "1", "-vf", "scale=-2:960",
                                      "-q:v", "3", image], log)
                     frames.append(image.name)
                 crops.append({"upload": upload_id, "x": crop["x"], "y": crop["y"], "size": crop["size"],

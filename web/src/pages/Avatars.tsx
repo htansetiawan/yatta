@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, Avatar, call } from "../api/client";
 import { store, useToast } from "../components/ui";
 
-const SOURCE = { experiment: "Trained", studio: "Trained in Yatta", quick: "Quick · Realistic only" };
+const SOURCE = { experiment: "Trained", studio: "Trained in Yatta", quick: "Quick avatar" };
 
 export default function Avatars() {
   const toast = useToast();
@@ -11,7 +11,8 @@ export default function Avatars() {
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   useEffect(() => { call(api.GET("/api/v1/avatars")).then(setAvatars).catch((e) => toast(e.message, true)); }, [toast]);
   const use = (a: Avatar) => {
-    store.set("create", { ...store.get("create", {}), avatar: a.id, feature: a.default_feature, ...(a.engines.includes("gaussiantalker") ? {} : { engine: "latentsync" }) });
+    const draft = store.get<{ engine?: string }>("create", {});
+    store.set("create", { ...draft, avatar: a.id, feature: a.default_feature, ...(draft.engine && a.engines.includes(draft.engine) ? {} : { engine: a.engines[0] }) });
     navigate("/create");
   };
   return (

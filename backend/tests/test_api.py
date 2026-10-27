@@ -98,6 +98,11 @@ class ApiTests(unittest.TestCase):
         c.post("/api/v1/renders/r-test-0001/unpublish", headers=WRITE)
         self.assertEqual(anonymous.get("/media/render/r-test-0001/video.mp4").status_code, 401)
 
+    def test_engines_are_listed(self):
+        engines = self.signed_in().get("/api/v1/engines").json()
+        self.assertIn("latentsync", [e["id"] for e in engines])
+        self.assertTrue(all({"name", "model", "speed", "available"} <= e.keys() for e in engines))
+
     def test_openapi_is_public_and_versioned(self):
         spec = client().get("/api/v1/openapi.json").json()
         self.assertEqual(spec["info"]["title"], "Yatta API")

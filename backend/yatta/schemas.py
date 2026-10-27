@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-Engine = Literal["latentsync", "gaussiantalker"]
+Engine = str  # an id from GET /api/v1/engines
 
 
 class Model(BaseModel):
@@ -48,14 +48,29 @@ class Status(Model):
     gpu: Gpu
     disk_free_gb: float
     elevenlabs: bool
-    latentsync: bool
     clone: bool
+    engines: dict[str, bool]
     queue: dict
     training: int
     poll_minutes: int
 
 
-# ---- avatars ---------------------------------------------------------------------------------------
+# ---- engines and avatars ---------------------------------------------------------------------------
+
+class EngineInfo(Model):
+    id: str
+    name: str = Field(description="Picker title, e.g. Realistic")
+    model: str = Field(description="The model behind the engine, e.g. LatentSync 1.6")
+    summary: str
+    badge: Optional[str] = None
+    needs: Literal["clip", "photo", "trained"] = Field(description="What an avatar must provide")
+    backgrounds: bool = Field(description="Can replace the background")
+    speech_models: bool = Field(description="Offers the avatar's speech-feature variants")
+    background_note: str = ""
+    speed: str
+    licence: str
+    available: bool = Field(description="Installed on this server")
+
 
 class Variant(Model):
     feature: str
@@ -178,7 +193,7 @@ class BackgroundChoice(BaseModel):
 
 class RenderCreate(BaseModel):
     avatar: str
-    feature: str
+    feature: Optional[str] = Field(None, description="Speech model, for engines with speech_models")
     engine: Engine = "latentsync"
     text: str = ""
     voice: VoiceChoice
@@ -199,6 +214,7 @@ class Render(Model):
     avatar_name: str
     feature: str
     engine: Engine = "gaussiantalker"
+    engine_name: Optional[str] = None
     voice: dict
     duration: Optional[float] = None
     published: Optional[str] = None

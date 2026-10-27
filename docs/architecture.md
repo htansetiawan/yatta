@@ -8,16 +8,31 @@
 | HTTP | `yatta/app.py` | Host and session guard, `X-Yatta` header check, media files, public share pages, static web app |
 | API | `yatta/api.py`, `yatta/schemas.py` | Versioned JSON endpoints; validation and response shaping only |
 | Services | `yatta/services.py` | Render queue, training manager, cloned voices, Quick avatars, uploads; JSON state in `YATTA_DATA` |
-| Engines | `yatta/engines.py`, `yatta/training/` | Speech synthesis, speech features, GaussianTalker and LatentSync renders, encoding, GPU gate |
+| Steps | `yatta/steps.py`, `yatta/gpu.py` | Speech synthesis, audio levels, encoding; the GPU gate |
+| Engines | `yatta/engines/` | One module per video model, behind one interface; the registry is all the rest of Yatta sees |
+| Training | `yatta/training/` | GaussianTalker training as a systemd unit |
 
 ## A render
 
 1. **Request.** `POST /api/v1/renders` (avatar, engine, script or audio, voice, background) writes `renders/<id>/job.json` in the `queued` state.
 2. **Speech.** The single render worker generates speech: ElevenLabs, MMS, a cloned voice through narrate (F5-TTS), or the uploaded audio.
-3. **Engine.**
-   - **Realistic:** LatentSync runs on a base clip of the avatar: the last 30 s of its training video, or a Quick avatar's clip.
-   - **Fast:** Yatta builds a per-job dataset of symlinks to the trained avatar. It contains the background, the held-out head poses looped back and forth to the speech length, a slim `track_params.pt`, and a two-frame training list. GaussianTalker renders with only the attention-free output.
+3. **Engine.** The job's engine prepares (CPU work), the worker waits for the GPU (`min_free_mib`), and the engine renders:
+   - **Realistic** (`latentsync`): LatentSync 1.6 runs on a face clip of the avatar: the last 30 s of its training video, or a Quick avatar's clip.
+   - **Expressive** (`longcat`): LongCat-Video-Avatar 1.5 generates the whole video from one frame of that clip, through `scripts/run_longcat.py` in the research repository.
+   - **Fast** (`gaussiantalker`): Yatta builds a per-job dataset of symlinks to the trained avatar. It contains the background, the held-out head poses looped back and forth to the speech length, a slim `track_params.pt`, and a two-frame training list. GaussianTalker renders with only the attention-free output.
 4. **Output.** The result is encoded to H.264/AAC MP4 with a poster frame. The job becomes `done`, and the web app shows it.
+
+## Adding an engine
+
+Every video model is a module in `yatta/engines/` with an `Engine` subclass (`yatta/engines/base.py`):
+
+- **Description** for the picker: `id`, `name`, `model`, `summary`, `badge`, `licence`, and rough timing (`load_seconds`, `seconds_per_second`).
+- **What it needs** from an avatar: `needs = "clip"` (a video of the face), `"photo"` (one frame of it) or `"trained"` (a GaussianTalker model). `face_clip()` and `face_photo()` provide the first two for any avatar.
+- **Options:** `backgrounds` (can replace the background) and `speech_models` (offers the avatar's speech-feature variants).
+- **`available()`**: true once its code, environment and weights are installed; until then the engine is listed with `available: false` and hidden from the picker.
+- **`render(job)`**: returns a video whose audio track is the job's speech; `prepare(job)` and `cleanup(job, output)` are optional.
+
+Then list it in `ENGINES` (`yatta/engines/__init__.py`). `GET /api/v1/engines`, each avatar's `engines`, the render queue and the web app's engine picker all follow from the registry.
 
 ## The GPU policy
 

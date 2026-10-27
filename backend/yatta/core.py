@@ -12,8 +12,10 @@ DATA = settings.data
 ROOT = settings.gaussian_talker
 FPS = 25
 FEATURES = {
-    # name: (label, channels, note); "latentsync" marks Quick avatars, which have no GaussianTalker model
-    "latentsync": ("LatentSync", 0, "Realistic engine only"),
+    # name: (label, channels, note). "clip" marks Quick avatars, which have a face clip but no GaussianTalker
+    # model; "latentsync" is the same in renders made before engines were pluggable.
+    "clip": ("Video clip", 0, "No trained model"),
+    "latentsync": ("Video clip", 0, "No trained model"),
     "deepspeech": ("DeepSpeech", 29, "Upstream default; English-only, 2017"),
     "esperanto": ("wav2vec2 · Esperanto", 44, "Best lip sync in experiment 006"),
     "hubert": ("HuBERT large", 1024, "Close second in experiment 006"),
@@ -179,7 +181,7 @@ def load_studio_avatars(data=DATA):
 
 
 def load_quick_avatars(data=DATA):
-    """Quick avatars (<data>/quick/<id>/quick.json): a face clip only, usable on the Realistic engine."""
+    """Quick avatars (<data>/quick/<id>/quick.json): a face clip only, for engines that need a clip or a photo."""
     avatars = []
     for manifest in sorted((Path(data) / "quick").glob("*/quick.json")):
         quick = json.loads(manifest.read_text())
@@ -187,8 +189,8 @@ def load_quick_avatars(data=DATA):
         if quick.get("state") != "ready" or not clip.is_file():
             continue
         avatars.append({"id": quick["id"], "name": quick["name"], "edition": "", "summary": quick.get("summary", ""),
-                        "default_feature": "latentsync", "source": "quick", "engines": ["latentsync"],
-                        "variants": [{"feature": "latentsync", "base": str(clip), "preview": str(clip), "metrics": {}}]})
+                        "default_feature": "clip", "source": "quick",
+                        "variants": [{"feature": "clip", "base": str(clip), "preview": str(clip), "metrics": {}}]})
     return avatars
 
 
@@ -204,10 +206,14 @@ def npy_shape(path):
     return tuple(int(x) for x in match.group(1).split(",") if x.strip())
 
 
-def find_variant(avatars, avatar_id, feature):
+def find_variant(avatars, avatar_id, feature=None):
+    """The avatar and its variant for ``feature``; without a feature, the default variant (or the first)."""
     for avatar in avatars:
         if avatar["id"] == avatar_id:
-            for variant in avatar["variants"]:
-                if variant["feature"] == feature:
-                    return avatar, variant
+            variants = avatar["variants"]
+            wanted = feature or avatar.get("default_feature")
+            match = next((v for v in variants if v["feature"] == wanted), None)
+            if match is None and not feature and variants:
+                match = variants[0]
+            return (avatar, match) if match else (None, None)
     return None, None

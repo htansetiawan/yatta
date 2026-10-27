@@ -8,12 +8,15 @@ export const STATE_LABEL: Record<string, string> = {
 };
 const STATE_PROGRESS: Record<string, number> = { queued: 4, voicing: 15, features: 32, waiting_gpu: 40, rendering: 60, encoding: 92, done: 100 };
 export const FEATURE_LABEL: Record<string, string> = {
-  deepspeech: "DeepSpeech", esperanto: "wav2vec2 · Esperanto", hubert: "HuBERT", whisper: "Whisper", latentsync: "LatentSync",
+  deepspeech: "DeepSpeech", esperanto: "wav2vec2 · Esperanto", hubert: "HuBERT", whisper: "Whisper",
 };
+// Renders made before jobs recorded their engine's name.
+const ENGINE_NAME: Record<string, string> = { latentsync: "Realistic", gaussiantalker: "Fast", longcat: "Expressive" };
 export const isActive = (j: Render) => !["done", "failed", "cancelled"].includes(j.state);
 
 export function jobEngine(j: Render) {
-  const engine = j.engine === "latentsync" ? "Realistic" : `Fast · ${FEATURE_LABEL[j.feature] ?? j.feature}`;
+  const name = j.engine_name ?? ENGINE_NAME[j.engine] ?? j.engine;
+  const engine = FEATURE_LABEL[j.feature] && j.engine === "gaussiantalker" ? `${name} · ${FEATURE_LABEL[j.feature]}` : name;
   return j.voice?.provider === "clone" ? `${engine} · cloned voice` : engine;
 }
 

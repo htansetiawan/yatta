@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from yatta import api, auth, core, engines, services
+from yatta import api, auth, core, services, steps
 from yatta.config import PACKAGE, env, settings
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1"}
@@ -81,7 +81,7 @@ def create_app():
         variant = variant_or_404(avatar_id, feature)
         poster = settings.data / "cache/posters" / f"{core.slugify(avatar_id)}-{feature}.jpg"
         if not poster.exists():
-            engines.poster_for(variant["preview"], poster, settings.data / "cache/posters.log", at=2.0)
+            steps.poster_for(variant["preview"], poster, settings.data / "cache/posters.log", at=2.0)
         return FileResponse(poster, media_type="image/jpeg")
 
     def data_file(*parts):
