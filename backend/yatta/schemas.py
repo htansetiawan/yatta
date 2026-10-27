@@ -215,6 +215,7 @@ class Render(Model):
     feature: str
     engine: Engine = "gaussiantalker"
     engine_name: Optional[str] = None
+    engine_model: Optional[str] = None
     voice: dict
     duration: Optional[float] = None
     published: Optional[str] = None

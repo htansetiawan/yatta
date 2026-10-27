@@ -138,8 +138,8 @@ export default function Create() {
             <div className="section-label"><span>Engine<span className="kanji">方式</span></span></div>
             <div className="picker">{installed.map((e) => (
               <button key={e.id} className={`option${e.id === engine?.id ? " selected" : ""}`} onClick={() => update({ engine: e.id })}>
-                <span className="grow"><span className="title">{e.name}{e.badge && <span className={`badge ${e.badge === "Recommended" ? "shu" : "ink"}`}>{e.badge}</span>}</span>
-                  <span className="sub">{e.summary}</span><span className="sub faint">{e.model} · {e.speed}</span></span>
+                <span className="grow"><span className="title">{e.model}{e.badge && <span className={`badge ${e.badge === "Recommended" ? "shu" : "ink"}`}>{e.badge}</span>}</span>
+                  <span className="sub">{e.name} · {e.summary}</span><span className="sub faint">{e.speed}</span></span>
               </button>
             ))}</div>
           </section>

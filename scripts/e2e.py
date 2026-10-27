@@ -30,9 +30,9 @@ with sync_playwright() as p:
         page.wait_for_selector(".settings img.thumb")
         assert page.locator(".settings img.thumb").count() >= 3
         page.locator("textarea").fill("Hello from the Yatta browser test.")
-        page.click("button.option:has-text('Fast')")
+        page.click("button.option:has-text('GaussianTalker')")
         assert page.locator(".swatch").count() >= 6
-        page.click("button.option:has-text('Realistic')")
+        page.click("button.option:has-text('LatentSync')")
         page.click(".seg button:has-text('My voices')")
         page.wait_for_timeout(300)
         page.screenshot(path=str(OUT / f"{name}-create.png"), full_page=True)

@@ -655,6 +655,8 @@ export interface components {
             engine: string;
             /** Engine Name */
             engine_name?: string | null;
+            /** Engine Model */
+            engine_model?: string | null;
             /** Voice */
             voice: {
                 [key: string]: unknown;

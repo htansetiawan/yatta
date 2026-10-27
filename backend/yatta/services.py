@@ -117,7 +117,7 @@ class RenderQueue:
                "background": request.get("background", {"type": "original"}) if engine.backgrounds else {"type": "original"},
                "avatar": avatar["id"], "avatar_name": f"{avatar['name']} {avatar.get('edition', '')}".strip(),
                "feature": variant["feature"], "published": None, "public": None,
-               "engine": engine.id, "engine_name": engine.name}
+               "engine": engine.id, "engine_name": engine.name, "engine_model": engine.model}
         write_json(job_dir / "job.json", job)
         self.wake.set()
         return job
