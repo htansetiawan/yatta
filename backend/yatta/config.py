@@ -52,6 +52,10 @@ class Settings:
     longcat: Path = field(default_factory=lambda: env_path("LONGCAT_ROOT", HOME / "git/gaussian-talker/.local/src/LongCat-Video"))
     longcat_python: Path = field(default_factory=lambda: env_path(
         "LONGCAT_PYTHON", HOME / "git/gaussian-talker/.local/envs/longcat/bin/python"))
+    comfyui: Path = field(default_factory=lambda: env_path("COMFYUI_ROOT", HOME / "git/gaussian-talker/.local/src/ComfyUI"))
+    comfyui_python: Path = field(default_factory=lambda: env_path(
+        "COMFYUI_PYTHON", HOME / "git/gaussian-talker/.local/envs/comfyui/bin/python"))
+    comfyui_port: int = field(default_factory=lambda: int(env("YATTA_COMFYUI_PORT", "8188")))
     narrate: Path = field(default_factory=lambda: env_path("NARRATE_BIN", HOME / "git/narrate/narrate"))
     gpu_poll_seconds: int = field(default_factory=lambda: int(env("YATTA_GPU_POLL", "1800")))
     min_free_gb: float = field(default_factory=lambda: float(env("YATTA_MIN_FREE_GB", "15")))

@@ -11,7 +11,9 @@ export const FEATURE_LABEL: Record<string, string> = {
   deepspeech: "DeepSpeech", esperanto: "wav2vec2 · Esperanto", hubert: "HuBERT", whisper: "Whisper",
 };
 // Renders made before jobs recorded their engine's model.
-const ENGINE_MODEL: Record<string, string> = { latentsync: "LatentSync 1.6", gaussiantalker: "GaussianTalker", longcat: "LongCat-Video-Avatar 1.5" };
+const ENGINE_MODEL: Record<string, string> = {
+  latentsync: "LatentSync 1.6", gaussiantalker: "GaussianTalker", longcat: "LongCat-Video-Avatar 1.5", minimax_h3: "MiniMax H3",
+};
 export const isActive = (j: Render) => !["done", "failed", "cancelled"].includes(j.state);
 
 export function jobEngine(j: Render) {

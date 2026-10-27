@@ -123,6 +123,17 @@ class StudioCoreTests(unittest.TestCase):
         self.assertEqual(core.find_variant(avatars, "a")[1], {"feature": "esperanto"})
         self.assertEqual(core.find_variant(avatars, "b"), (None, None))
 
+    def test_split_at_pauses(self):
+        self.assertEqual(core.split_at_pauses([], 10.0), [(0.0, 10.0)])
+        # cuts at the latest pause between 5.2 and 14.5 s into each piece
+        self.assertEqual(core.split_at_pauses([(3.0, 3.4), (9.0, 9.6), (13.0, 13.4), (20.0, 20.6)], 30.0),
+                         [(0.0, 13.2), (13.2, 20.3), (20.3, 30.0)])
+        # no pause in range: hard cut at the maximum
+        self.assertEqual(core.split_at_pauses([(1.0, 1.2)], 20.0), [(0.0, 14.5), (14.5, 20.0)])
+        pieces = core.split_at_pauses([(i * 2.0, i * 2.0 + 0.3) for i in range(1, 150)], 300.0)
+        self.assertTrue(all(b - a <= 14.5 for a, b in pieces) and pieces[-1][1] == 300.0)
+        self.assertEqual(core.parse_silences("silence_start: 1.25\nsilence_end: 1.5 | silence_duration: 0.25\n"), [(1.25, 1.5)])
+
 
 if __name__ == "__main__":
     unittest.main()

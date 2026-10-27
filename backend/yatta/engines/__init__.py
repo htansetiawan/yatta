@@ -8,8 +8,9 @@ from yatta.engines.base import Engine, RenderJob, face_clip, face_photo  # noqa:
 from yatta.engines.gaussiantalker import GaussianTalker
 from yatta.engines.latentsync import LatentSync
 from yatta.engines.longcat import LongCat
+from yatta.engines.minimax_h3 import MiniMaxH3
 
-ENGINES = {engine.id: engine for engine in (LatentSync(), LongCat(), GaussianTalker())}  # picker order
+ENGINES = {engine.id: engine for engine in (LatentSync(), MiniMaxH3(), LongCat(), GaussianTalker())}  # picker order
 
 
 def get(engine_id):

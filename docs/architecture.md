@@ -19,6 +19,7 @@
 3. **Engine.** The job's engine prepares (CPU work), the worker waits for the GPU (`min_free_mib`), and the engine renders:
    - **Realistic** (`latentsync`): LatentSync 1.6 runs on a face clip of the avatar: the last 30 s of its training video, or a Quick avatar's clip.
    - **Expressive** (`longcat`): LongCat-Video-Avatar 1.5 generates the whole video from one frame of that clip, through `scripts/run_longcat.py` in the research repository.
+   - **Lifelike** (`minimax_h3`): MiniMax H3 generates the video from one frame of the clip through a local ComfyUI server (started per render, `127.0.0.1` only, offline), in pieces of up to 14.5 s cut at pauses, with the original speech kept as the soundtrack.
    - **Fast** (`gaussiantalker`): Yatta builds a per-job dataset of symlinks to the trained avatar. It contains the background, the held-out head poses looped back and forth to the speech length, a slim `track_params.pt`, and a two-frame training list. GaussianTalker renders with only the attention-free output.
 4. **Output.** The result is encoded to H.264/AAC MP4 with a poster frame. The job becomes `done`, and the web app shows it.
 

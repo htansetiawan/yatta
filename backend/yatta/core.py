@@ -194,6 +194,29 @@ def load_quick_avatars(data=DATA):
     return avatars
 
 
+def split_at_pauses(silences, total, max_len=14.5, min_len=5.2):
+    """Cut ``total`` seconds of speech into pieces of at most ``max_len`` s, at the middle of a pause where one falls
+    between ``min_len`` and ``max_len`` into the piece (the latest such pause), else hard at ``max_len``.
+
+    ``silences`` is a list of (start, end) pauses. Returns [(start, end), ...] covering 0..total.
+    """
+    pieces, start = [], 0.0
+    while total - start > max_len:
+        cuts = [(a + b) / 2 for a, b in silences if start + min_len <= (a + b) / 2 <= start + max_len]
+        cut = round(max(cuts), 3) if cuts else round(start + max_len, 3)
+        pieces.append((start, cut))
+        start = cut
+    pieces.append((start, round(total, 3)))
+    return pieces
+
+
+def parse_silences(text):
+    """(start, end) pairs from ffmpeg ``silencedetect`` output."""
+    starts = [float(x) for x in re.findall(r"silence_start: (-?[0-9.]+)", text)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([0-9.]+)", text)]
+    return list(zip(starts, ends))
+
+
 def npy_shape(path):
     """Shape of a .npy array from its header, without numpy."""
     with open(path, "rb") as handle:

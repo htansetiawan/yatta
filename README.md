@@ -6,6 +6,7 @@ Yatta (やった, Japanese for *"Yay!"* or *"I did it!"*) is a personal avatar s
 
 - **Engines.** Each video model is a plug-in (`backend/yatta/engines/`), and the studio offers whichever are installed:
   - **Realistic:** [LatentSync 1.6](https://github.com/bytedance/LatentSync) keeps real footage of you and regenerates only the mouth to match the speech. It needs no training: a 15–60 s clip is enough.
+  - **Lifelike:** [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) generates the video from one photo and keeps the person's look. It runs locally through ComfyUI; its licence needs MiniMax's authorization in the US, which this deployment has for Harvard research (a private studio for a final project).
   - **Expressive** (experimental): [LongCat-Video-Avatar 1.5](https://github.com/meituan-longcat/LongCat-Video) generates the whole video from one photo, so the head and face move freely.
   - **Fast:** a [GaussianTalker](https://github.com/cvlab-kaist/GaussianTalker) avatar trained on 3–6 minutes of video. It renders in about 20 s and supports custom backgrounds.
 - **Voices:**
@@ -67,6 +68,7 @@ Settings come from the environment or from `~/.config/yatta/env` (`KEY=VALUE`, o
 | `GAUSSIAN_TALKER_ROOT` | `~/git/gaussian-talker` | GaussianTalker environments and scripts |
 | `LATENTSYNC_ROOT`, `LATENTSYNC_PYTHON` | under `GAUSSIAN_TALKER_ROOT/.local` | LatentSync checkout and interpreter |
 | `LONGCAT_ROOT`, `LONGCAT_PYTHON` | under `GAUSSIAN_TALKER_ROOT/.local` | LongCat-Video checkout (with `weights/`) and interpreter |
+| `COMFYUI_ROOT`, `COMFYUI_PYTHON`, `YATTA_COMFYUI_PORT` | under `GAUSSIAN_TALKER_ROOT/.local`, `8188` | ComfyUI for MiniMax H3 (weights linked into its `models/`) |
 | `NARRATE_BIN` | `~/git/narrate/narrate` | Voice cloning |
 | `YATTA_GPU_POLL` | `1800` | Seconds between GPU checks while another project is using it |
 | `YATTA_WORKER` | `1` | `0` serves the API without processing renders |
@@ -105,5 +107,6 @@ Yatta's own code is © Henry Tan. The engines it drives have their own licences:
 | MMS voices | CC-BY-NC 4.0 |
 | LatentSync | Apache-2.0 |
 | LongCat-Video-Avatar | MIT |
+| MiniMax H3 | MiniMax H3 Community License (US use by authorization) |
 
 So the current stack is for personal and research use. Only create avatars or voice clones of people who agreed; Yatta asks for confirmation every time.
