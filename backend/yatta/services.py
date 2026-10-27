@@ -21,6 +21,7 @@ from yatta.engines import gaussiantalker
 
 DATA = core.DATA
 TERMINAL = {"done", "failed", "cancelled"}
+MAX_RESTARTS = 2  # requeue a job interrupted by a restart at most this many times
 GPU_POLL = settings.gpu_poll_seconds  # Henry: check waiting jobs every 30 minutes
 
 
@@ -72,7 +73,13 @@ class RenderQueue:
         if worker:  # a restart interrupts work in progress; steps are redone from the start
             for job in self.list():
                 if job["state"] not in TERMINAL:
-                    self.update(job["id"], state="queued", detail="requeued after restart")
+                    restarts = job.get("restarts", 0) + 1
+                    if restarts > MAX_RESTARTS:  # e.g. a render that keeps running the server out of memory
+                        self.update(job["id"], state="failed", restarts=restarts,
+                                    detail=f"Interrupted by {restarts} restarts in a row (often running out of memory); "
+                                           "press Retry to try again")
+                    else:
+                        self.update(job["id"], state="queued", detail="requeued after restart", restarts=restarts)
 
     def path(self, job_id):
         if "/" in job_id or job_id.startswith("."):
@@ -133,7 +140,7 @@ class RenderQueue:
             raise ValueError("this render's engine no longer exists")
         if not engine.available():
             raise ValueError(f"{engine.model} is not installed on this server")
-        job = self.update(job_id, state="queued", detail="", waiting_since=None)
+        job = self.update(job_id, state="queued", detail="", waiting_since=None, restarts=0)
         self.wake.set()
         return job
 

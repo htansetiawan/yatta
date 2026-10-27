@@ -10,12 +10,14 @@ a little slower than the reference, so each piece gets 5 % + 0.2 s more frames (
 the time), and the final video keeps H3's own soundtrack (which matches the lips), with each piece's trailing silence
 trimmed before joining.
 
-ComfyUI is started for each render and stopped afterwards: even idle it keeps about 40 GB of GPU memory.
+ComfyUI is started for each render, as its own systemd unit (``yatta-comfyui-<job>``) with its own memory limit, and
+stopped afterwards: even idle it keeps about 40 GB of GPU memory, and loading H3 takes about 25 GB of RAM. Inside
+Yatta's own unit (24 GB, no swap) running out of memory killed the whole service and the render looped.
 """
 
 import json
 import os
-import signal
+import shlex
 import subprocess
 import time
 import urllib.request
@@ -30,8 +32,9 @@ COMFY = settings.comfyui
 PY = settings.comfyui_python
 PORT = settings.comfyui_port
 RUNNER = ROOT / "scripts/run_minimax_h3.py"
-MODELS = ("diffusion_models/minimax_h3_ref2va_int8_convrot.safetensors",
-          "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+UNETS = ("minimax_h3_ref2va_pruned_int8_convrot.safetensors",  # 21 GB; ComfyUI's template default, less RAM
+         "minimax_h3_ref2va_int8_convrot.safetensors")  # 34 GB
+MODELS = ("text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
           "vae/minimax_h3_video_vae_fp16.safetensors", "vae/minimax_h3_audio_vae_fp32.safetensors",
           "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors")
 SPEECHFEAT_PY = settings.speechfeat_python
@@ -61,7 +64,7 @@ class MiniMaxH3(Engine):
 
     def available(self):
         return (PY.is_file() and RUNNER.is_file() and TRANSCRIBE.is_file() and SPEECHFEAT_PY.is_file() and (COMFY / "main.py").is_file()
-                and all((COMFY / "models" / m).exists() for m in MODELS))
+                and all((COMFY / "models" / m).exists() for m in MODELS) and unet() is not None)
 
     def render(self, job):
         photo = face_photo(job.variant, job.log)
@@ -81,7 +84,7 @@ class MiniMaxH3(Engine):
         # Generate at the photo's own shape: a square video from a tall photo gets black bars in some pieces and an
         # invented background in others, so the joins jump.
         width, height = core.generation_size(*steps.image_size(photo))
-        server = start_server(job.dir / "comfyui.log")
+        server = start_server(job.dir / "comfyui.log", f"yatta-comfyui-{job.id}")
         try:
             parts = []
             for index, (start, end, text) in enumerate(pieces):
@@ -97,7 +100,7 @@ class MiniMaxH3(Engine):
                 for attempt in range(ATTEMPTS):
                     take = work / f"h3_{index:02d}_{attempt}.mp4"
                     steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", take,
-                               "--turbo", "--seed", str(42 + attempt), "--width", str(width), "--height", str(height),
+                               "--turbo", "--seed", str(42 + attempt), "--unet", unet(), "--width", str(width), "--height", str(height),
                                "--seconds", f"{seconds:.3f}", "--server", f"http://127.0.0.1:{PORT}"], job.log,
                               env={"PYTHONUNBUFFERED": "1"})
                     error = core.word_error_rate(text, transcript(take, work / f"take_{index:02d}_{attempt}.json", job.log))
@@ -152,31 +155,37 @@ def silences(wav):
     return core.parse_silences(out.stderr)
 
 
-def start_server(log, timeout=300):
-    """Start ComfyUI on 127.0.0.1 only, offline (no partner/API nodes, frontend without internet)."""
-    with open(log, "a") as out:
-        process = subprocess.Popen([str(PY), "main.py", "--listen", "127.0.0.1", "--port", str(PORT), "--offline",
-                                    "--disable-metadata"], cwd=COMFY, stdout=out, stderr=subprocess.STDOUT,
-                                   stdin=subprocess.DEVNULL, start_new_session=True)
+def unet():
+    """The H3 video model to use: the pruned one when it is installed."""
+    return next((name for name in UNETS if (COMFY / "models/diffusion_models" / name).exists()), None)
+
+
+def start_server(log, unit, timeout=300, memory="27G"):
+    """Start ComfyUI as a transient systemd unit on 127.0.0.1 only, offline (no partner/API nodes, frontend without
+    internet). Returns the unit name; ``stop_server`` stops it."""
+    subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)  # leftovers of an interrupted render
+    command = (f"exec {shlex.quote(str(PY))} main.py --listen 127.0.0.1 --port {PORT} --offline --disable-metadata "
+               f">> {shlex.quote(str(log))} 2>&1")
+    subprocess.run(["systemd-run", "--user", f"--unit={unit}", "--collect", "-p", f"MemoryMax={memory}",
+                    "-p", "MemorySwapMax=4G", "-p", "LimitNOFILE=1048576", f"--working-directory={COMFY}",
+                    "/bin/bash", "-c", command], check=True, capture_output=True)
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if process.poll() is not None:
-            raise steps.StepError(f"ComfyUI exited (code {process.returncode}); see {log}")
+        if not unit_active(unit):
+            raise steps.StepError(f"ComfyUI stopped while starting (possibly out of memory); see {log}")
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/system_stats", timeout=5) as response:
                 json.loads(response.read())
-                return process
+                return unit
         except OSError:
             time.sleep(2)
-    stop_server(process)
+    stop_server(unit)
     raise steps.StepError(f"ComfyUI did not start within {timeout} s; see {log}")
 
 
-def stop_server(process):
-    if process.poll() is None:
-        os.killpg(process.pid, signal.SIGTERM)
-        try:
-            process.wait(timeout=60)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+def unit_active(unit):
+    return subprocess.run(["systemctl", "--user", "is-active", "--quiet", unit]).returncode == 0
+
+
+def stop_server(unit):
+    subprocess.run(["systemctl", "--user", "stop", unit], capture_output=True)

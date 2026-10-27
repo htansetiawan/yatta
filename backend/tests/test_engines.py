@@ -65,6 +65,18 @@ class EngineRegistryTests(unittest.TestCase):
             del engines.ENGINES["gaussiantalker"].available
         self.assertEqual((job["state"], job["detail"]), ("queued", ""))
 
+    def test_a_job_that_keeps_crashing_the_server_stops_being_requeued(self):
+        queue = services.RenderQueue(worker=False)
+        job_dir = queue.path("r-loop-0001")
+        job_dir.mkdir(parents=True, exist_ok=True)
+        services.write_json(job_dir / "job.json", {"id": "r-loop-0001", "created": "x", "updated": "x",
+                                                   "state": "rendering", "engine": "gaussiantalker", "detail": ""})
+        states = []
+        for _ in range(3):
+            services.RenderQueue(worker=True)  # what a service restart does
+            states.append(queue.get("r-loop-0001")["state"])
+        self.assertEqual(states, ["queued", "queued", "failed"])
+
 
 if __name__ == "__main__":
     unittest.main()
