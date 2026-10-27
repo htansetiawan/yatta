@@ -4,9 +4,11 @@ It runs locally through ComfyUI (``scripts/run_minimax_h3.py`` in the research r
 sent to MiniMax. H3 makes at most about 15 s per generation and regenerates the speech it is given as a voice
 reference: with the exact words in its prompt it says them correctly (word error rate 0.00 in experiment 007), without
 them it babbles. So the speech is transcribed with Whisper (word timings), cut between words into pieces of up to 13 s,
-and each piece is generated from the same photo with its audio as the voice and its words in the prompt. H3 speaks a
-little slower than the reference, so each piece gets about 12 % more frames, and the final video keeps H3's own
-soundtrack (which matches the lips), with each piece's trailing silence trimmed before joining.
+and each piece is generated from the same photo with its audio as the voice and its words in the prompt. With a script, each
+piece's words come from the script itself, matched to the transcript (Whisper mishears names and acronyms). H3 speaks
+a little slower than the reference, so each piece gets 5 % + 0.2 s more frames (with 12 % it repeated a phrase to fill
+the time), and the final video keeps H3's own soundtrack (which matches the lips), with each piece's trailing silence
+trimmed before joining.
 
 ComfyUI is started for each render and stopped afterwards: even idle it keeps about 40 GB of GPU memory.
 """
@@ -69,6 +71,11 @@ class MiniMaxH3(Engine):
         pieces = core.split_words(words, job.seconds, MAX_PIECE, MIN_PIECE)
         if not pieces:
             raise steps.StepError("no words found in the speech")
+        if job.text.strip():  # the script's own words (Whisper mishears names and acronyms)
+            texts = core.script_pieces(job.text, [w[2] for w in words], [p[3] for p in pieces[1:]])
+            pieces = [(start, end, text or heard) for (start, end, heard, _, _), text in zip(pieces, texts)]
+        else:
+            pieces = [(start, end, heard) for start, end, heard, _, _ in pieces]
         server = start_server(job.dir / "comfyui.log")
         try:
             parts = []
@@ -78,7 +85,8 @@ class MiniMaxH3(Engine):
                 audio = work / f"speech_{index:02d}.wav"
                 steps.ffmpeg(["-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", job.speech, "-c:a", "pcm_s16le", audio], job.log)
                 raw = work / f"h3_{index:02d}.mp4"
-                seconds = min(MAX_VIDEO, max(MIN_PIECE, (end - start) * 1.12 + 0.3))
+                # A little room for H3's slightly slower speech; too much and it fills the time by repeating words.
+                seconds = min(MAX_VIDEO, max(MIN_PIECE, (end - start) * 1.05 + 0.2))
                 steps.run(["python3", RUNNER, "--image", photo, "--audio", audio, "--text", text, "--out", raw, "--turbo",
                            "--width", "640", "--height", "640", "--seconds", f"{seconds:.3f}",
                            "--server", f"http://127.0.0.1:{PORT}"], job.log, env={"PYTHONUNBUFFERED": "1"})

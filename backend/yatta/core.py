@@ -1,5 +1,6 @@
 """Pure helpers (standard library only): pose looping, audio levels, log parsing and the avatar registry."""
 
+import difflib
 import json
 import math
 import os
@@ -216,7 +217,8 @@ def split_at_pauses(silences, total, max_len=14.5, min_len=5.2):
 
 
 def split_words(words, total, max_len=13.0, min_len=5.2):
-    """Pieces of speech cut between words: [(start, end, text), ...] from Whisper words [[start, end, word], ...].
+    """Pieces of speech cut between words: [(start, end, text, first, stop), ...] from Whisper words
+    [[start, end, word], ...]; ``words[first:stop]`` are the piece's words.
 
     Cuts go in the gaps between consecutive words (``split_at_pauses`` with each gap as a pause); each word belongs
     to the piece holding its midpoint. Pieces without words are dropped.
@@ -224,10 +226,35 @@ def split_words(words, total, max_len=13.0, min_len=5.2):
     gaps = [(words[i][1], words[i + 1][0]) for i in range(len(words) - 1)]
     pieces = []
     for start, end in split_at_pauses(gaps, total, max_len, min_len):
-        text = " ".join(w[2] for w in words if start <= (w[0] + w[1]) / 2 < end or (end == total and (w[0] + w[1]) / 2 >= end))
-        if text.strip():
-            pieces.append((start, end, text.strip()))
+        inside = [i for i, w in enumerate(words)
+                  if start <= (w[0] + w[1]) / 2 < end or (end == total and (w[0] + w[1]) / 2 >= end)]
+        if inside:
+            pieces.append((start, end, " ".join(words[i][2] for i in inside).strip(), inside[0], inside[-1] + 1))
     return pieces
+
+
+def script_pieces(script, heard, starts):
+    """Split the original ``script`` where the transcript ``heard`` (Whisper's words) is split.
+
+    ``starts`` are the indices in ``heard`` where pieces 2, 3, ... begin. Words are matched after lower-casing and
+    dropping punctuation (difflib), so the script's own spelling survives where Whisper mishears (names, acronyms).
+    """
+    tokens = script.split()
+    norm = lambda word: re.sub(r"[^\w']", "", word.lower())
+    matcher = difflib.SequenceMatcher(a=[norm(w) for w in heard], b=[norm(t) for t in tokens], autojunk=False)
+    mapping = {}
+    for block in matcher.get_matching_blocks():
+        for k in range(block.size):
+            mapping[block.a + k] = block.b + k
+    cuts, previous = [], 0
+    for start in starts:
+        later = [j for j in range(start, len(heard)) if j in mapping]
+        index = mapping[later[0]] - (later[0] - start) if later else len(tokens)
+        index = min(max(index, previous), len(tokens))
+        cuts.append(index)
+        previous = index
+    bounds = [0] + cuts + [len(tokens)]
+    return [" ".join(tokens[a:b]) for a, b in zip(bounds, bounds[1:])]
 
 
 def parse_silences(text):

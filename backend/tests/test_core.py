@@ -137,8 +137,15 @@ class StudioCoreTests(unittest.TestCase):
         words = [[0.0, 0.6, "Hi,"], [0.7, 1.7, "I am Enrica."], [6.5, 7.0, "Today"], [7.1, 14.0, "we talk."],
                  [14.4, 20.0, "Bye."]]
         # 20 s needs two pieces of at most 13 s; the only gap that keeps both at least 5.2 s long is 7.0-7.1
-        self.assertEqual(core.split_words(words, 20.0), [(0.0, 7.05, "Hi, I am Enrica. Today"), (7.05, 20.0, "we talk. Bye.")])
-        self.assertEqual(core.split_words([[0.0, 3.0, "Short."]], 3.2), [(0.0, 3.2, "Short.")])
+        self.assertEqual(core.split_words(words, 20.0), [(0.0, 7.05, "Hi, I am Enrica. Today", 0, 3), (7.05, 20.0, "we talk. Bye.", 3, 5)])
+        self.assertEqual(core.split_words([[0.0, 3.0, "Short."]], 3.2), [(0.0, 3.2, "Short.", 0, 1)])
+
+    def test_script_pieces_keep_the_scripts_spelling(self):
+        script = "Glance is now tested against Point Cloud and G3DGS scenarios. This is the update."
+        heard = "glance is now tested against point cloud and g3d .js scenarios this is the update".split()
+        self.assertEqual(core.script_pieces(script, heard, [11]),
+                         ["Glance is now tested against Point Cloud and G3DGS scenarios.", "This is the update."])
+        self.assertEqual(core.script_pieces("One two three.", ["one", "two", "three"], []), ["One two three."])
         self.assertEqual(core.parse_silences("silence_start: 1.25\nsilence_end: 1.5 | silence_duration: 0.25\n"), [(1.25, 1.5)])
 
 

@@ -202,7 +202,8 @@ class RenderQueue:
                 self.update(job_id, state=state, detail=detail, **fields)
 
             render_job = engines.RenderJob(id=job_id, dir=job_dir, avatar=avatar, variant=variant, speech=data / "speech.wav",
-                                           seconds=seconds, background=job["background"], log=log, status=status)
+                                           seconds=seconds, background=job["background"], log=log, status=status,
+                                           text="" if job["voice"].get("provider") == "upload" else job.get("text", ""))
             engine.prepare(render_job)
             self.wait_for_gpu(job_id, engine.min_free_mib)
             status("rendering", f"{engine.name}: about {fmt_minutes(engine.estimate(seconds))} for {seconds:.0f} s of speech")

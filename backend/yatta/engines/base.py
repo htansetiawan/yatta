@@ -23,6 +23,7 @@ class RenderJob:
     background: dict
     log: Path
     status: Callable[..., None]  # status(state, detail, **fields) updates the job record
+    text: str = ""  # the script, when the speech was synthesized from one (empty for uploaded or recorded audio)
 
 
 class Engine:
