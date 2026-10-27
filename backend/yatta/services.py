@@ -287,7 +287,7 @@ def create_quick(name, source, consent, start=None, end=None, summary=""):
     folder = DATA / "quick" / quick_id
     folder.mkdir(parents=True)
     quick = {"id": quick_id, "name": name, "source": str(source), "start": start, "end": end, "consent": consent,
-             "summary": summary or "Quick avatar · Realistic engine only", "created": now(), "state": "preparing"}
+             "summary": summary or "Quick avatar", "created": now(), "state": "preparing"}
     write_json(folder / "quick.json", quick)
     threading.Thread(target=prepare_quick, args=(quick_id,), daemon=True).start()
     return quick
