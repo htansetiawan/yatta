@@ -13,6 +13,8 @@ Yatta (やった, Japanese for *"Yay!"* or *"I did it!"*) is a personal avatar s
   - An uploaded or recorded audio file.
 - **Sharing:** every video can get a public `/watch/<slug>` page with iMessage, WhatsApp and Open Graph previews.
 
+Website: **[htansetiawan.github.io/yatta](https://htansetiawan.github.io/yatta/)** · Studio (private beta): [yatta.enrica.ai](https://yatta.enrica.ai/)
+
 This repository is the product system: the API, the render and training services, and the web app. It contains **no data, no media, no model weights and no keys**; those live on the host, outside the repository.
 
 ## Architecture
@@ -28,6 +30,7 @@ backend/yatta/
    engines.py   speech → features → GaussianTalker / LatentSync render → MP4; GPU gate
    core.py      pure helpers (pose looping, log parsing, registry)
    training/    train_avatar.sh + configs: GaussianTalker training as a systemd unit
+site/           landing page, deployed to GitHub Pages by .github/workflows/pages.yml
 ```
 
 Read [docs/architecture.md](docs/architecture.md) for the request lifecycle and the GPU policy.
