@@ -12,6 +12,10 @@ export default function Library() {
   const refresh = useCallback(() => call(api.GET("/api/v1/renders")).then(setItems).catch((e) => toast(e.message, true)), [toast]);
   useEffect(() => { refresh(); }, [refresh]);
   usePoll(refresh, 5000, items.some(isActive));
+  const retry = async (j: Render) => {
+    try { await call(api.POST("/api/v1/renders/{job_id}/retry", { params: { path: { job_id: j.id } } })); refresh(); }
+    catch (e) { toast((e as Error).message, true); }
+  };
   const remove = async (j: Render) => {
     if (j.state === "done" && !confirm("Delete this video? This cannot be undone.")) return;
     try { await call(api.DELETE("/api/v1/renders/{job_id}", { params: { path: { job_id: j.id } } })); refresh(); }
@@ -36,6 +40,7 @@ export default function Library() {
             {j.state === "failed" && <p className="small" style={{ color: "var(--shu-ink)" }}>{j.detail}</p>}
             <div className="actions">
               {j.state === "done" && <><a className="btn sm" href={j.video_url ?? ""} download aria-label="Download">{icons.download}</a><button className="btn sm" onClick={() => setSharing(j)}>{icons.share}Share</button></>}
+              {j.state === "failed" && <button className="btn sm" onClick={() => retry(j)}>Retry</button>}
               {!isActive(j) && <button className="btn sm ghost danger" onClick={() => remove(j)}>{icons.trash}Delete</button>}
             </div>
           </div>

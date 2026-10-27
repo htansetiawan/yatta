@@ -122,6 +122,21 @@ class RenderQueue:
         self.wake.set()
         return job
 
+    def retry(self, job_id):
+        """Queue a failed or cancelled render again with the same request."""
+        job = self.get(job_id)
+        if job["state"] not in ("failed", "cancelled"):
+            raise ValueError("only failed renders can be retried")
+        try:
+            engine = engines.get(job.get("engine") or "gaussiantalker")
+        except KeyError:
+            raise ValueError("this render's engine no longer exists")
+        if not engine.available():
+            raise ValueError(f"{engine.model} is not installed on this server")
+        job = self.update(job_id, state="queued", detail="", waiting_since=None)
+        self.wake.set()
+        return job
+
     def delete(self, job_id):
         job = self.get(job_id)
         if job["state"] not in TERMINAL:

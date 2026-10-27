@@ -49,6 +49,22 @@ class EngineRegistryTests(unittest.TestCase):
             del engines.ENGINES["test"]
             del Installed.available
 
+    def test_only_failed_renders_are_retried(self):
+        queue = services.RenderQueue(worker=False)
+        job_dir = queue.path("r-retry-0001")
+        job_dir.mkdir(parents=True, exist_ok=True)
+        services.write_json(job_dir / "job.json", {"id": "r-retry-0001", "created": "x", "updated": "x", "state": "done",
+                                                   "engine": "gaussiantalker", "detail": ""})
+        with self.assertRaisesRegex(ValueError, "only failed"):
+            queue.retry("r-retry-0001")
+        queue.update("r-retry-0001", state="failed", detail="boom")
+        engines.ENGINES["gaussiantalker"].available = lambda: True
+        try:
+            job = queue.retry("r-retry-0001")
+        finally:
+            del engines.ENGINES["gaussiantalker"].available
+        self.assertEqual((job["state"], job["detail"]), ("queued", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

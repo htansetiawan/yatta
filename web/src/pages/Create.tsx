@@ -47,6 +47,10 @@ export default function Create() {
     refreshRenders();
   }, [refreshRenders, refreshVoices, toast]);
   usePoll(refreshRenders, 3000, renders.some(isActive));
+  const retryRender = async (j: Render) => {
+    try { await call(api.POST("/api/v1/renders/{job_id}/retry", { params: { path: { job_id: j.id } } })); setFocus(j.id); refreshRenders(); }
+    catch (e) { toast((e as Error).message, true); }
+  };
   const removeRender = async (j: Render) => {
     try { await call(api.DELETE("/api/v1/renders/{job_id}", { params: { path: { job_id: j.id } } })); refreshRenders(); }
     catch (e) { toast((e as Error).message, true); }
@@ -128,7 +132,7 @@ export default function Create() {
           {renders.length > 0 && <>
             <div className="section-label" style={{ marginTop: 26 }}><span>Recent<span className="kanji">最近</span></span><Link className="faint small" to="/library">See all</Link></div>
             <div className="card">{renders.slice(0, 6).map((j) => (
-              <JobRow key={j.id} job={j} onPlay={() => setFocus(j.id)} onDelete={() => removeRender(j)} onCheckGpu={async () => { await call(api.POST("/api/v1/gpu/check")); toast("Checking the GPU now"); }} />
+              <JobRow key={j.id} job={j} onPlay={() => setFocus(j.id)} onDelete={() => removeRender(j)} onRetry={() => retryRender(j)} onCheckGpu={async () => { await call(api.POST("/api/v1/gpu/check")); toast("Checking the GPU now"); }} />
             ))}</div>
           </>}
         </div>

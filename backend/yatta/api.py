@@ -336,6 +336,15 @@ def delete_render(job_id: str):
     return {"ok": True}
 
 
+@router.post("/renders/{job_id}/retry", response_model=schemas.Render, tags=["renders"])
+def retry_render(job_id: str):
+    job_or_404(job_id)
+    try:
+        return public_job(renders().retry(job_id))
+    except ValueError as error:
+        bad(error)
+
+
 @router.post("/renders/{job_id}/publish", response_model=schemas.Render, tags=["renders"])
 def publish(job_id: str, body: schemas.PublishRequest):
     """Give the render a public share page at /watch/<slug> (no access key needed to watch)."""

@@ -20,7 +20,7 @@ export function jobEngine(j: Render) {
   return j.voice?.provider === "clone" ? `${engine} · cloned voice` : engine;
 }
 
-export function JobRow({ job, onPlay, onCheckGpu, onDelete }: { job: Render; onPlay?: () => void; onCheckGpu?: () => void; onDelete?: () => void }) {
+export function JobRow({ job, onPlay, onCheckGpu, onDelete, onRetry }: { job: Render; onPlay?: () => void; onCheckGpu?: () => void; onDelete?: () => void; onRetry?: () => void }) {
   const active = isActive(job);
   const indeterminate = ["waiting_gpu", "rendering", "voicing", "features"].includes(job.state);
   return (
@@ -40,6 +40,7 @@ export function JobRow({ job, onPlay, onCheckGpu, onDelete }: { job: Render; onP
       </div>
       {job.state === "done" ? <button className="btn sm ghost" onClick={onPlay}>{icons.play}Play</button>
         : <span className={`badge ${job.state === "failed" ? "shu" : active ? "warn" : ""}`}>{STATE_LABEL[job.state] ?? job.state}</span>}
+      {job.state === "failed" && onRetry && <button className="btn sm ghost" onClick={onRetry}>Retry</button>}
       {!active && job.state !== "done" && onDelete && <button className="btn sm ghost danger" aria-label="Delete" title="Delete" onClick={onDelete}>{icons.trash}</button>}
     </div>
   );
